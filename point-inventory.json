@@ -1,0 +1,380 @@
+[
+  {
+    "name": "Floor - Site Info | Site Info | Outdoor Air Temperature",
+    "model": "outdoorActualTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Floor - Site Info | Smart Grid Ready | Enable",
+    "model": "sgReady",
+    "kind": "Bool",
+    "unit": "",
+    "control": "switch"
+  },
+  {
+    "name": "Floor - Site Info | Smart Grid Ready | SG Ready: Control pattern",
+    "model": "sgReadyControlPattern",
+    "kind": "Str",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Floor - Site Info | Bivalent | Bivalent actual",
+    "model": "bivalentActual",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Floor - Site Info | Bivalent | Bivalent control pattern",
+    "model": "bivalentControlPattern",
+    "kind": "Str",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Tank | Primary Loop | Bivalent DHW Mode",
+    "model": "bivalentDhwMode",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Buffer | Primary Loop | Bivalent Heat Mode",
+    "model": "bivalentHeatMode",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Floor - Site Info | Quiet mode | Quiet mode request",
+    "model": "quietModeRequest",
+    "kind": "Str",
+    "unit": "",
+    "control": "select"
+  },
+  {
+    "name": "Buffer | Mode",
+    "model": "bufferMode",
+    "kind": "Str",
+    "unit": "",
+    "control": "select"
+  },
+  {
+    "name": "Tank | Sterilization | Run Request",
+    "model": "sterilizationRequest",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Point Group | Deice Status",
+    "model": "deiceStatus",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Point Group | Deice Status",
+    "model": "deiceStatus",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone1-Zone2 On/Off",
+    "model": "zone1Zone2OnOffSetpoint",
+    "kind": "Str",
+    "unit": "",
+    "control": "select"
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Water Temp - Zone 1",
+    "model": "zone1ActualWaterOutletRoomPoolTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Water Temp - Zone 1 Setpoint Status",
+    "model": "zone1WaterTemperatureSetpoint",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 2 | Water Temp - Zone 2",
+    "model": "zone2ActualWaterOutletRoomPoolTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 2 | Water Temp - Zone 2 Setpoint Status",
+    "model": "zone2WaterTemperatureSetpoint",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Water Temp - Buffer Setpoint Status",
+    "model": "bufferSetpoint",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Point Group | Compressor Total On Time",
+    "model": "compressorTotalOnTimeMsb",
+    "kind": "Number",
+    "unit": "h",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Energy | Cold Water | COP",
+    "model": "coldModeCop",
+    "kind": "Number",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Energy | Hot Water | COP",
+    "model": "hotModeCop",
+    "kind": "Number",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Energy | DHW Water | COP",
+    "model": "dhwModeCop",
+    "kind": "Number",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Point Group | Water Temperature - Outlet",
+    "model": "outletWaterTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Point Group | Water Temperature - Inlet",
+    "model": "inletWaterTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "HP 01 - Main | Point Group | Water Pressure",
+    "model": "waterPressure",
+    "kind": "Number",
+    "unit": "bar",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Point Group | Compressor Total On Time",
+    "model": "compressorTotalOnTimeMsb",
+    "kind": "Number",
+    "unit": "h",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Energy | Cold Water | COP",
+    "model": "coldModeCop",
+    "kind": "Number",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Energy | Hot Water | COP",
+    "model": "hotModeCop",
+    "kind": "Number",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Energy | DHW Water | COP",
+    "model": "dhwModeCop",
+    "kind": "Number",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Point Group | Water Temperature - Outlet",
+    "model": "outletWaterTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Point Group | Water Temperature - Inlet",
+    "model": "inletWaterTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "HP 02 - Sub Unit | Point Group | Water Pressure",
+    "model": "waterPressure",
+    "kind": "Number",
+    "unit": "bar",
+    "control": null
+  },
+  {
+    "name": "Buffer | Water Temp - Actual Value",
+    "model": "bufferTankWaterTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Control Type - Hot Mode",
+    "model": "heatModeWaterTemperatureSensor",
+    "kind": "Str",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Buffer | Control Type - Cold Mode",
+    "model": "coolModeWaterTemperatureSensor",
+    "kind": "Str",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Tank | Primary Loop | Disable DHW",
+    "model": "stopRun",
+    "kind": "Bool",
+    "unit": "",
+    "control": "switch"
+  },
+  {
+    "name": "Tank | Sterilization | Enabled",
+    "model": "sterilizationEnabled",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Sterilization Schedule",
+    "model": "sterilizationSchedule",
+    "kind": "Bool",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Tank | Sterilization | Boiling Temperature",
+    "model": "tankSterilizationBoilingTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Tank | Sterilization | Operation Time",
+    "model": "tankSterilizationOperationTimeMaximum",
+    "kind": "Number",
+    "unit": "min",
+    "control": null
+  },
+  {
+    "name": "Tank | Water Temp - Setpoint Control",
+    "model": "tankWaterTempSpBeforeSgReady",
+    "kind": "Number",
+    "unit": "°C",
+    "control": "number"
+  },
+  {
+    "name": "Tank | Water Temp - Setpoint Max",
+    "model": "tankWaterMaxSetpointTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Δt Buffer Tank",
+    "model": "tBufferTank",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Quiet mode schedule",
+    "model": "quietModeSchedule",
+    "kind": "Str",
+    "unit": "",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Water Temp - Zone 1 Heat Setpoint",
+    "model": "zone1WaterTemperatureHotSetpoint",
+    "kind": "Number",
+    "unit": "°C",
+    "control": "number"
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Water Temp - Zone 1 Cool Setpoint",
+    "model": "zone1WaterTemperatureColdSetpoint",
+    "kind": "Number",
+    "unit": "°C",
+    "control": "number"
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Heat Mode | Water Temp - Max",
+    "model": "compensationCurveHeatZone1MaxTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Heat Mode | Outdoor Air Temp - Max",
+    "model": "compensationCurveHeatZone1OutdoorAirMaxTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Heat Mode | Water Temp - Min",
+    "model": "compensationCurveHeatZone1MinTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Heat Mode | Outdoor Air Temp - Min",
+    "model": "compensationCurveHeatZone1OutdoorAirMinTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Cool Mode | Water Temp - Max",
+    "model": "compensationCurveCoolZone1MaxTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Cool Mode | Outdoor Air Temp - Max",
+    "model": "compensationCurveCoolZone1OutdoorAirMaxTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Cool Mode | Water Temp - Min",
+    "model": "compensationCurveCoolZone1MinTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  },
+  {
+    "name": "Buffer | Zone Group | Zone 1 | Compensation Curve - Cool Mode | Outdoor Air Temp - Min",
+    "model": "compensationCurveCoolZone1OutdoorAirMinTemperature",
+    "kind": "Number",
+    "unit": "°C",
+    "control": null
+  }
+]

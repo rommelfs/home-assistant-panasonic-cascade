@@ -1,0 +1,57 @@
+{
+  "title": "Panasonic Cascade / Smart Edge",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect controller",
+        "description": "Enter a session cookie or API token. Disabling certificate verification for a self-signed certificate leaves server identity unchecked. Do not share credentials in chat.",
+        "data": {
+          "url": "Controller URL (HTTPS)",
+          "project": "FIN project",
+          "session_cookie": "Session cookie (complete Cookie header)",
+          "bearer_token": "API bearer token (optional)",
+          "attest_key": "SkyArc-Attest-Key (if required)",
+          "verify_ssl": "Verify HTTPS certificate"
+        }
+      },
+      "site": {
+        "title": "Select site",
+        "data": {
+          "site_id": "Site"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Renew session",
+        "description": "Sign in to your controller again and enter fresh session credentials.",
+        "data": {
+          "session_cookie": "Session cookie (complete Cookie header)",
+          "bearer_token": "API bearer token (optional)",
+          "attest_key": "SkyArc-Attest-Key (if required)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot reach controller or decode its FIN response.",
+      "invalid_auth": "Invalid/expired session or access denied.",
+      "invalid_config": "Check HTTPS URL, project and provide at least one credential.",
+      "no_sites": "No accessible cascade site found."
+    },
+    "abort": {
+      "already_configured": "This site is already configured.",
+      "reauth_successful": "Session renewed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling and controls",
+        "description": "Controls change FIN default values. Schedules and manual overrides may take precedence. Writes have not been verified against real hardware.",
+        "data": {
+          "scan_interval": "Polling interval (seconds)",
+          "enable_controls": "Enable controls (experimental)",
+          "verify_ssl": "Verify HTTPS certificate"
+        }
+      }
+    }
+  }
+}
