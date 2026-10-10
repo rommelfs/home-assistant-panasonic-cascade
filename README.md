@@ -1,6 +1,6 @@
 # Panasonic Cascade / Smart Edge für Home Assistant
 
-Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.1.0 wurde anhand von zwei HAR-Aufzeichnungen entwickelt. Die Home-Assistant-Laufzeit, die Verbindung zur realen Anlage und Schreibzugriffe sind noch nicht live geprüft.
+Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.2.0 ergänzt die Anmeldung mit Benutzername/Passwort und die Projektauswahl anhand weiterer HAR-Aufzeichnungen und des darin enthaltenen FIN-Login-Codes. Die Verbindung zur realen Anlage und Schreibzugriffe sind noch nicht live geprüft.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade).
 
@@ -9,24 +9,20 @@ Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/romme
 1. Den Ordner `custom_components/panasonic_cascade` aus diesem Paket nach `/config/custom_components/panasonic_cascade` auf dem Home-Assistant-System kopieren.
 2. Home Assistant neu starten.
 3. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Panasonic Cascade / Smart Edge** öffnen.
-4. HTTPS-Adresse des Controllers eingeben; eine vollständige URL zur Anlagenübersicht wird ebenfalls akzeptiert. Das Projekt ist bei der untersuchten Anlage `pSmartEdge`.
-5. Sitzungs-Cookie und gegebenenfalls `SkyArc-Attest-Key` eingeben. Alternativ wird ein FIN-Bearer-Token unterstützt, sofern der Controller solche Tokens bereitstellt. Diese Alternative ist im Client-Code der Weboberfläche vorhanden, wurde aber im HAR nicht als tatsächliche Anmeldung beobachtet.
-6. Bei einem selbstsignierten Zertifikat kann **HTTPS-Zertifikat prüfen** ausgeschaltet werden. Die Verbindung bleibt verschlüsselt, aber die Serveridentität wird dann nicht geprüft. Es ist kein individueller Fingerprint fest eingebaut.
-7. Die erkannte Anlage auswählen. Zunächst sind nur Messwerte und Statusanzeigen aktiv.
+4. HTTPS-Adresse des Controllers, **Benutzername und Passwort** eingeben. Eine vollständige URL zur Anlagenübersicht wird ebenfalls akzeptiert. Für Konten ohne Passwort darf das Passwortfeld leer bleiben.
+5. Bei einem selbstsignierten Zertifikat kann **HTTPS-Zertifikat prüfen** ausgeschaltet werden. Die Verbindung bleibt verschlüsselt, aber die Serveridentität wird dann nicht geprüft. Es ist kein individueller Fingerprint fest eingebaut.
+6. Ein Projekt aus der automatisch geladenen **Projektauswahl** auswählen, anschließend die Anlage in diesem Projekt auswählen.
+7. Für weitere Projekte die Integration erneut hinzufügen. Einträge und Entitäten verschiedener Projekte sind voneinander getrennt; dieselbe Anlage wird nicht doppelt eingerichtet.
+
+Die Anmeldung folgt dem vom Server angebotenen FIN-Verfahren (SCRAM, älteres HMAC oder vom Server angefordertes Plaintext über HTTPS). Cookies und `SkyArc-Attest-Key` werden automatisch bezogen und nur im Arbeitsspeicher gehalten. Nach einer ausdrücklich abgelaufenen Sitzung erfolgt genau eine erneute Anmeldung und Wiederholung der Anfrage. Falsche Zugangsdaten oder fehlende Rechte lösen eine Aufforderung zur erneuten Anmeldung aus. Passwortberechnungen blockieren nicht die Home-Assistant-Ereignisschleife.
 
 Der Home-Assistant-Rechner muss die Controller-Adresse selbst erreichen können. Die Beispieladresse `172.17.0.1` ist nicht auf jedem Rechner dieselbe Anlage und muss gegebenenfalls durch die LAN-Adresse ersetzt werden.
 
-## Sitzungszugang aus Safari
+## Vorhandene Einträge aus Version 0.1.0
 
-Diese erste Version automatisiert keinen Benutzername-/Passwort-Login: In den gelieferten HAR-Dateien war nur eine bereits angemeldete Sitzung aufgezeichnet.
+Bestehende cookiebasierte Einträge bleiben nutzbar. Zur Umstellung auf Benutzername/Passwort im Menü des vorhandenen Integrationseintrags **Neu konfigurieren** wählen. Nach Ablauf einer Sitzung ist auch **Erneut authentifizieren** möglich. Projekt, Anlage und Entitäts-IDs bleiben dabei erhalten. Alternativ kann ein Eintrag neu eingerichtet werden; ein noch vorhandener Eintrag für dieselbe Anlage muss dann zuvor entfernt werden.
 
-1. In Safari am Controller anmelden.
-2. Web-Inspektor öffnen und unter **Netzwerk** die Seite neu laden.
-3. Einen erfolgreichen Abruf an `/api/pSmartEdge/eval`, `evalAll` oder `watchPoll` auswählen.
-4. Unter den **Anfrage-Headern** den vollständigen Wert von `Cookie` in das Feld **Sitzungs-Cookie** in Home Assistant eintragen. Im untersuchten System heißt der Anmelde-Cookie `skyarc-auth-80`; sein Name kann auf anderen Anlagen abweichen.
-5. Falls in derselben Anfrage vorhanden, den Wert von `SkyArc-Attest-Key` in das gleichnamige Feld eintragen.
-
-Die Werte direkt in Home Assistant eingeben und nicht in GitHub, Screenshots, Protokolle oder diesen Chat kopieren. Home Assistant speichert sie als Integrationskonfiguration; seine Konfigurationsdateien und Backups enthalten deshalb Zugangsdaten. Läuft die Sitzung ab, fordert die Integration zur erneuten Eingabe auf. Ein automatischer, dauerhafter Login benötigt noch einen dokumentierten FIN-Anmeldeweg oder einen geeigneten dauerhaften API-Zugang.
+Benutzername und Passwort werden in der Home-Assistant-Konfiguration gespeichert. Die automatisch ausgestellten Sitzungscookies und Attestierungsschlüssel werden nicht in die Konfiguration geschrieben. Zugangsdaten und Home-Assistant-Backups entsprechend schützen und nicht in GitHub oder diesen Chat kopieren.
 
 ## Daten und Bedienelemente
 
@@ -69,16 +65,18 @@ Der Befehl ändert ausschließlich das lokale Manifest. Die Vorlage `validation-
 
 ## Prüfung und Grenzen
 
-Lokal bestanden: 15 Protokoll- und Mock-Transporttests, Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden erfasst. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
+Lokal bestanden: **37 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden erfasst. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
 
 ```sh
+# Für den vollständigen Testumfang Python 3.14 verwenden.
+python3 -m pip install -r requirements-dev.txt
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q custom_components
 python3 replay_har.py /PFAD/overview.har /PFAD/settings.har
 ```
 
-Die Mock-Tests ersetzen Netzwerkverkehr; sie sind kein erfolgreicher Home-Assistant- oder Hardwaretest. Die Tests können mit der Python-Standardbibliothek laufen; wenn `aiohttp` installiert ist, verwenden sie dessen echte Timeout-/Exception-Typen und weiterhin einen Mock-Transport. Home Assistant liefert `aiohttp` zur Laufzeit selbst.
+Die Authentifizierungstests verwenden echte lokale HTTP-Anfragen mit erfundenen Konten und prüfen vollständigen Login, Cookie/Attestierung, mehrere Projekte, abgelaufene Sitzungen und fehlerhafte Zugangsdaten. Die SCRAM-Berechnung ist zusätzlich mit dem öffentlichen SHA-256-Testvektor aus RFC 7677 geprüft. Sie sind kein erfolgreicher Hardwaretest. Für den vollständigen Testumfang `requirements-dev.txt` installieren. Ohne `aiohttp` werden die lokalen Transporttests, ohne Home Assistant die Einrichtungstests übersprungen. Home Assistant liefert `aiohttp` zur Laufzeit selbst. Ein kompletter laufender Home-Assistant-Eintrag mit angeschlossener Anlage ist noch nicht geprüft.
 
-Bei Änderungen der Anlagenstruktur die Integration neu laden, um neue Punkte zu erkennen. Keine automatische History-Übernahme, kein COP aus den Leistungswerten, kein Climate-Entity, keine Browsersteuerung und kein bisher verifizierter Dauerzugang per Benutzername/Passwort.
+Bei Änderungen der Anlagenstruktur die Integration neu laden, um neue Punkte zu erkennen. Keine automatische History-Übernahme, kein COP aus den Leistungswerten, kein Climate-Entity und keine Browsersteuerung. Die Login-HAR enthält den Login-Bildschirm und seinen JavaScript-Code, aber nicht den abgeschickten Challenge-Austausch. Die Implementierung ist daher gegen Testserver geprüft und muss an der tatsächlichen Installation bestätigt werden.
 
-Quellen für die Implementierung: bereitgestellte HAR-Dateien, [Haystack Zinc](https://project-haystack.org/doc/docHaystack/Zinc), [Home-Assistant-Konfigurationsdialog](https://developers.home-assistant.io/docs/core/integration/config_flow/), [DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data/), [HACS-Anforderungen](https://www.hacs.dev/docs/publish/integration/).
+Quellen für die Implementierung: bereitgestellte HAR-Dateien, [Haystack Zinc](https://project-haystack.org/doc/docHaystack/Zinc), [Haystack Auth](https://project-haystack.org/doc/docHaystack/Auth), [SCRAM-SHA-256 / RFC 7677](https://www.rfc-editor.org/rfc/rfc7677), [Home-Assistant-Konfigurationsdialog](https://developers.home-assistant.io/docs/core/integration/config_flow/), [DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data/), [HACS-Anforderungen](https://www.hacs.dev/docs/publish/integration/).

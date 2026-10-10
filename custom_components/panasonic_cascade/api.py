@@ -3,9 +3,11 @@ import asyncio
 import math
 import re
 from urllib.parse import urlsplit, urlunsplit
+from http.cookies import SimpleCookie
 
 import aiohttp
 
+from .auth import AuthProtocolError, Scram, add_handshake, challenge, encode, hash_name, hmac_header, params
 from .model import bounds, control_kind, enum_options
 from .zinc import MARKER, Number, Ref, REFERENCE, ZincError, parse_grids, quote, reference
 
@@ -30,18 +32,18 @@ class CascadeClient:
     def __init__(self, session, config):
         self.session = session
         self.url = normalize_url(config["url"])
-        self.project = config["project"]
-        if not re.fullmatch(r"[A-Za-z0-9_-]+", self.project):
-            raise ValueError("Invalid project")
+        self.project = config.get("project", "sys")
+        self._validate_project(self.project)
         self.verify_ssl = config.get("verify_ssl", True)
+        self.username = config.get("username", "").strip()
+        self.password = config.get("password", "")
         self.headers = {"Content-Type": "text/zinc", "Accept": "text/zinc", "Origin": self.url}
-        # Credentials are supplied through HA configuration, never copied from HAR.
         cookie = config.get("session_cookie", "").strip()
         bearer = config.get("bearer_token", "").strip()
         attest = config.get("attest_key", "").strip()
-        if not cookie and not bearer:
-            raise ValueError("A session cookie or bearer token is required")
-        if any("\r" in s or "\n" in s for s in (cookie, bearer, attest)):
+        if not self.username and not cookie and not bearer:
+            raise ValueError("Username or legacy session credential required")
+        if any("\r" in v or "\n" in v for v in (cookie, bearer, attest, self.username)):
             raise ValueError("Invalid credential format")
         if cookie:
             self.headers["Cookie"] = cookie
@@ -49,32 +51,133 @@ class CascadeClient:
             self.headers["Authorization"] = f"Bearer {bearer}"
         if attest:
             self.headers["SkyArc-Attest-Key"] = attest
+        self.cookies = SimpleCookie()
+        self.authenticated = not bool(self.username)
         self.lock = asyncio.Lock()
 
-    async def eval(self, expression):
-        payload = 'ver:"3.0"\nexpr\n' + quote(expression) + '\n'
+    @staticmethod
+    def _validate_project(project):
+        if not re.fullmatch(r"[A-Za-z0-9_-]+", project):
+            raise ValueError("Invalid project")
+
+    async def _request(self, method, path, headers=None, data=None):
+        request_headers = dict(self.headers if headers is None else headers)
+        if self.cookies:
+            request_headers['Cookie'] = '; '.join(f'{key}={morsel.coded_value}' for key, morsel in self.cookies.items())
         try:
-            async with self.lock:
-                async with self.session.post(
-                    f"{self.url}/api/{self.project}/eval", data=payload.encode(),
-                    headers=self.headers, ssl=self.verify_ssl, allow_redirects=False,
-                    timeout=aiohttp.ClientTimeout(total=30),
-                ) as response:
-                    if response.status in (301, 302, 303, 307, 308, 401, 403):
-                        raise AuthError("Session expired or access denied")
-                    if response.status != 200:
-                        raise ApiError(f"FIN HTTP status {response.status}")
-                    text = await response.text()
-            if text.lstrip().lower().startswith(("<!doctype", "<html")):
-                raise AuthError("Login required")
-            grids = parse_grids(text)
-            if len(grids) != 1:
-                raise ApiError("Unexpected number of response grids")
-            return grids[0]
+            request = self.session.get if method == 'GET' else self.session.post
+            kwargs = dict(headers=request_headers, ssl=self.verify_ssl, allow_redirects=False,
+                          timeout=aiohttp.ClientTimeout(total=30))
+            if data is not None:
+                kwargs['data'] = data
+            async with request(self.url + path, **kwargs) as response:
+                # Keep per-client cookies in memory, including for literal IP hosts.
+                # Never rely on Home Assistant's shared cookie jar.
+                response_headers = {k.lower(): v for k, v in getattr(response, 'headers', {}).items()}
+                raw_headers = getattr(response, 'headers', {})
+                cookie_headers = raw_headers.getall('Set-Cookie', []) if hasattr(raw_headers, 'getall') else ([raw_headers['Set-Cookie']] if 'Set-Cookie' in raw_headers else [])
+                for raw in cookie_headers:
+                    incoming = SimpleCookie(); incoming.load(raw)
+                    for key, morsel in incoming.items():
+                        if morsel['max-age'] == '0':
+                            self.cookies.pop(key, None)
+                        else:
+                            self.cookies[key] = morsel.value
+                return response.status, response_headers, await response.text()
         except (aiohttp.ClientError, TimeoutError) as err:
             raise ApiError("Controller connection failed") from err
-        except ZincError as err:
-            raise ApiError("FIN response could not be decoded") from err
+
+    async def login(self):
+        async with self.lock:
+            await self._login()
+
+    async def _login(self):
+        if not self.username:
+            raise AuthError('No username configured for session renewal')
+        self.authenticated = False
+        self.cookies.clear()
+        for key in ('Cookie', 'Authorization', 'SkyArc-Attest-Key'):
+            self.headers.pop(key, None)
+        try:
+            status, headers, _ = await self._request('GET', '/user/auth', {'Authorization': 'HELLO username=' + encode(self.username)})
+            scram = None
+            if status == 401:
+                scheme, info = challenge(headers.get('www-authenticate', ''))
+                if scheme == 'scram':
+                    algorithm = hash_name(info.get('hash', ''))
+                    scram = Scram(self.username, self.password, algorithm)
+                    first = add_handshake('SCRAM data=' + scram.first(), info)
+                    status, headers, _ = await self._request('GET', '/user/auth', {'Authorization': first})
+                    if status != 401:
+                        raise AuthError('SCRAM challenge failed')
+                    next_scheme, next_info = challenge(headers.get('www-authenticate', ''))
+                    if next_scheme != 'scram' or hash_name(next_info.get('hash', info['hash'])) != algorithm:
+                        raise AuthError('SCRAM scheme changed')
+                    # PBKDF2 may be costly; keep it off HA's event loop.
+                    final = await asyncio.to_thread(scram.final, next_info.get('data', ''))
+                    auth_header = add_handshake('SCRAM data=' + final, next_info)
+                elif scheme == 'hmac':
+                    auth_header = hmac_header(self.username, self.password, info)
+                elif scheme in ('x-plaintext', 'plaintext'):
+                    auth_header = add_handshake(f'{scheme} username={encode(self.username)}, password={encode(self.password)}', info)
+                else:
+                    raise AuthError('Unsupported FIN authentication scheme')
+                status, headers, _ = await self._request('GET', '/user/auth', {'Authorization': auth_header})
+            if status != 200:
+                raise AuthError('Username/password authentication failed')
+            auth_info = params(headers['authentication-info']) if headers.get('authentication-info') else {}
+            if scram is not None and auth_info.get('data'):
+                scram.verify(auth_info['data'])
+            if auth_info.get('authtoken'):
+                self.headers['Authorization'] = 'BEARER authToken=' + auth_info['authtoken']
+            if not self.cookies and 'Authorization' not in self.headers:
+                raise AuthError('FIN did not issue a usable session')
+            # finstack.GetAttestKey() uses this response header, not a fixed key.
+            status, headers, text = await self._request('GET', '/finStackAuth')
+            if status != 200 or text.lstrip().lower().startswith(('<html', '<!doctype')):
+                raise AuthError('FIN session validation failed')
+            if headers.get('fin-stack-auth'):
+                self.headers['SkyArc-Attest-Key'] = headers['fin-stack-auth']
+            self.authenticated = True
+        except AuthProtocolError as err:
+            raise AuthError('FIN authentication protocol failed') from err
+        finally:
+            if not self.authenticated:
+                self.cookies.clear()
+                for key in ('Cookie', 'Authorization', 'SkyArc-Attest-Key'):
+                    self.headers.pop(key, None)
+
+    async def eval(self, expression, project=None):
+        project = project or self.project
+        self._validate_project(project)
+        payload = ('ver:"3.0"\nexpr\n' + quote(expression) + '\n').encode()
+        async with self.lock:
+            if not self.authenticated:
+                await self._login()
+            # Retry only an explicit expired/rejected session, at most once.
+            for attempt in range(2):
+                status, headers, text = await self._request('POST', f'/api/{project}/eval', data=payload)
+                auth_failure = (status in (301, 302, 303, 307, 308, 401) or
+                                text.lstrip().lower().startswith(('<!doctype', '<html')) or
+                                bool(re.search(r'errType:"[^"\n]*(?:AuthErr|AuthenticationErr)', text)))
+                if auth_failure and self.username and attempt == 0:
+                    await self._login()
+                    continue
+                if auth_failure or status == 403:
+                    raise AuthError('Session expired or access denied')
+                if status != 200:
+                    raise ApiError(f'FIN HTTP status {status}')
+                try:
+                    grids = parse_grids(text)
+                except ZincError as err:
+                    raise ApiError('FIN response could not be decoded') from err
+                if len(grids) != 1:
+                    raise ApiError('Unexpected number of response grids')
+                return grids[0]
+        raise AuthError('Session renewal failed')
+
+    async def projects(self):
+        return await self.eval('secureEval(projs())', project='sys')
 
     async def read(self, filter_text):
         # Matches parseFilter(...).readAll() in the captured application.

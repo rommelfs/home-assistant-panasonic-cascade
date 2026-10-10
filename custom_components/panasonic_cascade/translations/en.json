@@ -4,13 +4,11 @@
     "step": {
       "user": {
         "title": "Connect controller",
-        "description": "Enter a session cookie or API token. Disabling certificate verification for a self-signed certificate leaves server identity unchecked. Do not share credentials in chat.",
+        "description": "Sign in with your controller account, then select a project and site. An empty password is allowed for accounts configured without one. Disabling certificate verification leaves server identity unchecked.",
         "data": {
           "url": "Controller URL (HTTPS)",
-          "project": "FIN project",
-          "session_cookie": "Session cookie (complete Cookie header)",
-          "bearer_token": "API bearer token (optional)",
-          "attest_key": "SkyArc-Attest-Key (if required)",
+          "username": "Username",
+          "password": "Password",
           "verify_ssl": "Verify HTTPS certificate"
         }
       },
@@ -22,23 +20,39 @@
       },
       "reauth_confirm": {
         "title": "Renew session",
-        "description": "Sign in to your controller again and enter fresh session credentials.",
+        "description": "Enter account credentials again. The project and site remain unchanged.",
         "data": {
-          "session_cookie": "Session cookie (complete Cookie header)",
-          "bearer_token": "API bearer token (optional)",
-          "attest_key": "SkyArc-Attest-Key (if required)"
+          "username": "Username",
+          "password": "Password"
+        }
+      },
+      "project": {
+        "title": "Select project",
+        "description": "Each project is configured as a separate integration entry.",
+        "data": {
+          "project": "Project"
+        }
+      },
+      "reconfigure": {
+        "title": "Change sign-in",
+        "description": "Switch to username/password sign-in. The project, site and entity IDs are retained.",
+        "data": {
+          "username": "Username",
+          "password": "Password"
         }
       }
     },
     "error": {
       "cannot_connect": "Cannot reach controller or decode its FIN response.",
-      "invalid_auth": "Invalid/expired session or access denied.",
-      "invalid_config": "Check HTTPS URL, project and provide at least one credential.",
-      "no_sites": "No accessible cascade site found."
+      "invalid_auth": "Sign-in failed or access denied.",
+      "invalid_config": "Check HTTPS URL and username.",
+      "no_sites": "No accessible cascade site found.",
+      "no_projects": "No accessible projects found."
     },
     "abort": {
       "already_configured": "This site is already configured.",
-      "reauth_successful": "Session renewed."
+      "reauth_successful": "Session renewed.",
+      "reconfigure_successful": "Sign-in updated."
     }
   },
   "options": {

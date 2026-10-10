@@ -4,13 +4,11 @@
     "step": {
       "user": {
         "title": "Controller verbinden",
-        "description": "Cookie oder API-Token eingeben. Bei selbstsigniertem Zertifikat kann die Prüfung abgeschaltet werden; die Serveridentität wird dann nicht geprüft. Zugangsdaten nicht hier im Chat teilen.",
+        "description": "Mit dem Controller-Benutzerkonto anmelden. Anschließend Projekt und Anlage auswählen. Leeres Passwort ist für entsprechend konfigurierte Konten erlaubt. Bei abgeschalteter Zertifikatsprüfung wird die Serveridentität nicht geprüft.",
         "data": {
           "url": "Controller-Adresse (HTTPS)",
-          "project": "FIN-Projekt",
-          "session_cookie": "Sitzungs-Cookie (vollständiger Cookie-Header)",
-          "bearer_token": "API-Bearer-Token (optional)",
-          "attest_key": "SkyArc-Attest-Key (falls erforderlich)",
+          "username": "Benutzername",
+          "password": "Passwort",
           "verify_ssl": "HTTPS-Zertifikat prüfen"
         }
       },
@@ -22,23 +20,39 @@
       },
       "reauth_confirm": {
         "title": "Sitzung erneuern",
-        "description": "Im Controller erneut anmelden und neue Sitzungsdaten eingeben.",
+        "description": "Zugangsdaten erneut eingeben. Projekt und Anlage bleiben erhalten.",
         "data": {
-          "session_cookie": "Sitzungs-Cookie (vollständiger Cookie-Header)",
-          "bearer_token": "API-Bearer-Token (optional)",
-          "attest_key": "SkyArc-Attest-Key (falls erforderlich)"
+          "username": "Benutzername",
+          "password": "Passwort"
+        }
+      },
+      "project": {
+        "title": "Projekt auswählen",
+        "description": "Jedes Projekt wird als eigener Integrationseintrag eingerichtet.",
+        "data": {
+          "project": "Projekt"
+        }
+      },
+      "reconfigure": {
+        "title": "Anmeldung ändern",
+        "description": "Auf Benutzername/Passwort umstellen. Projekt, Anlage und Entitäts-IDs bleiben erhalten.",
+        "data": {
+          "username": "Benutzername",
+          "password": "Passwort"
         }
       }
     },
     "error": {
       "cannot_connect": "Controller nicht erreichbar oder ungültige FIN-Antwort.",
-      "invalid_auth": "Sitzung ungültig, abgelaufen oder Zugriff verweigert.",
-      "invalid_config": "HTTPS-Adresse, Projekt und mindestens einen Sitzungszugang prüfen.",
-      "no_sites": "Keine zugängliche Cascade-Anlage gefunden."
+      "invalid_auth": "Anmeldung fehlgeschlagen oder Zugriff verweigert.",
+      "invalid_config": "HTTPS-Adresse und Benutzername prüfen.",
+      "no_sites": "Keine zugängliche Cascade-Anlage gefunden.",
+      "no_projects": "Keine zugänglichen Projekte gefunden."
     },
     "abort": {
       "already_configured": "Diese Anlage ist bereits eingerichtet.",
-      "reauth_successful": "Sitzung erneuert."
+      "reauth_successful": "Sitzung erneuert.",
+      "reconfigure_successful": "Anmeldung aktualisiert."
     }
   },
   "options": {

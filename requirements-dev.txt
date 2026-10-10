@@ -1,0 +1,2 @@
+# Test dependencies only; not required by the integration manifest.
+homeassistant==2026.10.0
