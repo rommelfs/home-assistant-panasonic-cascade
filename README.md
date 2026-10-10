@@ -1,6 +1,6 @@
 # Panasonic Cascade / Smart Edge für Home Assistant
 
-Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.2.0 ergänzt die Anmeldung mit Benutzername/Passwort und die Projektauswahl anhand weiterer HAR-Aufzeichnungen und des darin enthaltenen FIN-Login-Codes. Die Verbindung zur realen Anlage und Schreibzugriffe sind noch nicht live geprüft.
+Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.3.0 bereinigt die Anzeigenamen, ergänzt einen eigenen Zone-1-Schalter und einen Dashboard-Assistenten. Anmeldung mit Benutzername/Passwort und Projektauswahl sind seit 0.2.0 enthalten. Schreibzugriffe sind noch nicht an einer realen Anlage geprüft.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade).
 
@@ -23,6 +23,33 @@ Der Home-Assistant-Rechner muss die Controller-Adresse selbst erreichen können.
 Bestehende cookiebasierte Einträge bleiben nutzbar. Zur Umstellung auf Benutzername/Passwort im Menü des vorhandenen Integrationseintrags **Neu konfigurieren** wählen. Nach Ablauf einer Sitzung ist auch **Erneut authentifizieren** möglich. Projekt, Anlage und Entitäts-IDs bleiben dabei erhalten. Alternativ kann ein Eintrag neu eingerichtet werden; ein noch vorhandener Eintrag für dieselbe Anlage muss dann zuvor entfernt werden.
 
 Benutzername und Passwort werden in der Home-Assistant-Konfiguration gespeichert. Die automatisch ausgestellten Sitzungscookies und Attestierungsschlüssel werden nicht in die Konfiguration geschrieben. Zugangsdaten und Home-Assistant-Backups entsprechend schützen und nicht in GitHub oder diesen Chat kopieren.
+
+## Aktualisierung auf 0.3.0: Namen, Zone 1 und Dashboard
+
+In HACS Version **0.3.0** herunterladen (gegebenenfalls Vorabversionen anzeigen) und Home Assistant neu starten. Anzeigenamen enthalten jetzt keine senkrechten Striche mehr. Die eindeutigen Entitäts- und Gerätekennungen bleiben erhalten; bereits verwendete Entitäts-IDs und selbst vergebene Namen ändern sich nicht.
+
+### Zone 1 schalten
+
+Unter **Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren** die Option **Steuerungen aktivieren** einschalten und speichern. Danach erscheint **Zone 1 – Ein/Aus**, sofern der Regler den gemeinsamen Zone-1/2-Punkt als beschreibbar bereitstellt. Der Schalter zeigt den aktuellen wirksamen Zustand von Zone 1.
+
+Vor jedem Schalten liest die Integration den gemeinsamen Wert erneut aus der gewählten Anlage. Sie verändert nur den ersten Teil von beispielsweise `On/On` zu `Off/On`; Zone 2 wird aus dieser aktuellen Abfrage übernommen. Eigene Schreibvorgänge werden nacheinander ausgeführt. Wenn die aktuellen Werte unbekannt sind oder vom Standardwert abweichen, wird kein Schreibbefehl gesendet. Dann zunächst ein Zeitprogramm oder eine Übersteuerung in der Regleroberfläche prüfen. Der Schalter verwendet wie die anderen Bedienelemente `pointSetDef`. Eine zeitgleiche Änderung durch einen anderen Bediener zwischen Lesen und Schreiben kann das Protokoll nicht atomar ausschließen.
+
+### Dashboard mit aktuellen Werten
+
+1. **Einstellungen → Dashboards → Dashboard hinzufügen** öffnen und ein **leeres Dashboard** anlegen. Als Titel beispielsweise **Panasonic Cascade** und als URL **panasonic-cascade** wählen. In der Seitenleiste anzeigen lassen.
+2. **Entwicklerwerkzeuge → Aktionen** öffnen und **Panasonic Cascade: Cascade-Dashboard befüllen** auswählen (Aktion `panasonic_cascade.populate_dashboard`).
+3. Als **Dashboard-Adresse** `panasonic-cascade` eingeben und die Aktion ausführen. Das ist der URL-Pfad ohne Schrägstriche, nicht der Titel. Bei mehreren Installationen kann optional ein einzelner Integrationseintrag ausgewählt werden.
+4. Das neue Dashboard in der Seitenleiste öffnen. Es enthält **Übersicht** mit Schaltern, Sollwerten, Leistung, aktuellen Temperaturen und Betriebszuständen sowie **Alle Werte**, nach Gerät gruppiert. Verläufe füllen sich mit den von Home Assistant aufgezeichneten Messwerten; es wird keine frühere Controller-Historie importiert.
+
+Alternativ die Aktion in der YAML-Ansicht ausführen:
+
+```yaml
+action: panasonic_cascade.populate_dashboard
+data:
+  url_path: panasonic-cascade
+```
+
+Es werden die tatsächlichen Entitäts-IDs aus Home Assistant verwendet, auch wenn sie umbenannt wurden oder einen Zahlensuffix tragen. Die Aktion benötigt Administratorrechte und befüllt nur ein bereits vorhandenes Dashboard. Vorhandene Karten werden ohne ausdrücklich aktivierte Option **Vorhandene Dashboard-Konfiguration ersetzen** nicht ersetzt. Wurden Steuerungen erst später aktiviert oder neue Geräte erkannt, dieselbe Aktion erneut mit dieser Option ausführen. Individuelle Änderungen an diesem Dashboard werden dabei ersetzt; andere Dashboards bleiben erhalten.
 
 ## Daten und Bedienelemente
 
@@ -47,7 +74,7 @@ Unter **Konfigurieren** lassen sich experimentelle Steuerungen aktivieren. Die A
 | Zone 1 Kühl-Solltemperatur | `zone1WaterTemperatureColdSetpoint` |
 | Warmwasser-Solltemperatur | `tankWaterTempSpBeforeSgReady` |
 
-Die Steuerungen verwenden ausschließlich die in den Punktmetadaten beworbene Aktion **`pointSetDef` / Set Default**. Sie zeigen `writeDef`, also den zu bearbeitenden Standardwert. Der separate Sensor zeigt `curVal`, also den wirksamen aktuellen Wert. Zeitprogramme und manuelle Übersteuerungen können dafür sorgen, dass diese beiden Werte voneinander abweichen. Die Integration erzeugt keine manuellen oder Notfall-Übersteuerungen.
+Die Steuerungen verwenden ausschließlich die in den Punktmetadaten beworbene Aktion **`pointSetDef` / Set Default**. Die allgemeinen Schalter, Auswahl- und Temperaturfelder zeigen `writeDef`, also den zu bearbeitenden Standardwert. Der neue Zone-1-Schalter zeigt hingegen den wirksamen Zustand aus `curVal`. Der separate Sensor zeigt `curVal`, also den wirksamen aktuellen Wert. Zeitprogramme und manuelle Übersteuerungen können dafür sorgen, dass diese beiden Werte voneinander abweichen. Die Integration erzeugt keine manuellen oder Notfall-Übersteuerungen.
 
 Temperaturen sind auf konservative Bereiche beschränkt (Heizen 20–55 °C, Kühlen 5–25 °C, Warmwasser 40–60 °C); engere Servergrenzen haben Vorrang. Nummern werden mit ihrer °C-Einheit übertragen. Sterilisationsauslösung, Notfallaktionen und beliebige FIN-Ausdrücke sind nicht als Steuerungen freigegeben. Ob ein Punkt tatsächlich ein Bedienelement erhält, hängt zusätzlich von den Servermetadaten und Schreibrechten ab.
 
@@ -65,7 +92,7 @@ Der Befehl ändert ausschließlich das lokale Manifest. Die Vorlage `validation-
 
 ## Prüfung und Grenzen
 
-Lokal bestanden: **37 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden erfasst. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
+Lokal bestanden: **49 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Dazu kommen Zone-1-Tests für alle Kombinationen, frische Abfragen, Übersteuerungen und gleichzeitige Bedienung sowie Dashboard-Tests einschließlich Speichern/Laden im echten Lovelace-Speicher. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden erfasst. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
 
 ```sh
 # Für den vollständigen Testumfang Python 3.14 verwenden.

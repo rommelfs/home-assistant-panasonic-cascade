@@ -6,6 +6,15 @@ from .const import DOMAIN
 from .model import name
 from .zinc import reference
 
+FIELD_NAMES = {
+    "mode": "Betriebsart", "runningUnitsAmount": "Laufende Geräte",
+    "requiredUnitsAmount": "Angeforderte Geräte", "availableUnitsAmount": "Verfügbare Geräte",
+    "configuredUnitsAmount": "Konfigurierte Geräte", "isConnected": "Verbunden",
+    "isOn": "Eingeschaltet", "isRunning": "In Betrieb", "isInAlarm": "Alarm",
+    "isAvailableBuffer": "Puffer verfügbar", "isAvailableTank": "Warmwasser verfügbar",
+    "run": "In Betrieb", "isEnabled": "Aktiviert",
+}
+
 
 class CascadeEntity(CoordinatorEntity):
     def __init__(self, coordinator, ident, field="curVal"):
@@ -14,7 +23,7 @@ class CascadeEntity(CoordinatorEntity):
         self.field = field
         row = coordinator.data[ident]
         self._attr_unique_id = f"{coordinator.entry.unique_id}|{ident}|{field}"
-        self._attr_name = name(row) + (f" | {field}" if field != "curVal" else "")
+        self._attr_name = name(row) + (f" – {FIELD_NAMES.get(field, field)}" if field != "curVal" else "")
         self._attr_has_entity_name = False
         site = coordinator.entry.data["site_id"]
         parent = reference(row.get("equipRef")) or (ident if row.get("heatPumpModelId") or row.get("equip") else site)

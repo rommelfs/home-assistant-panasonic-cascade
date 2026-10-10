@@ -111,3 +111,16 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 client(Session(), **overrides)
         self.assertEqual(api.normalize_url('https://controller.invalid/pod/app#/overview'), 'https://controller.invalid')
+
+
+    async def test_zone_read_is_scoped_and_validated(self):
+        s = Session([Response(200, 'ver:"3.0"\nid,curVal\n@p:demo:r:zone,"On/On"\n')])
+        row = await client(s).read_point('p:demo:r:zone', 'p:demo:r:site')
+        self.assertEqual(row['curVal'], 'On/On')
+        expression = zinc.parse_grids(s.calls[0][1]['data'].decode())[0][0]['expr']
+        self.assertEqual(expression, 'parseFilter("id==@p:demo:r:zone and siteRef==@p:demo:r:site").readAll()')
+        for text in ('ver:"3.0"\nid\n', 'ver:"3.0"\nid\n@p:demo:r:wrong\n'):
+            with self.assertRaises(api.ApiError):
+                await client(Session([Response(200,text)])).read_point('p:demo:r:zone', 'p:demo:r:site')
+        with self.assertRaises(ValueError):
+            await client(Session()).read_point('bad);deleteAll()', 'p:demo:r:site')

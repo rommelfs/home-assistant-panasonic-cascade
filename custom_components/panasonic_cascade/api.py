@@ -183,6 +183,14 @@ class CascadeClient:
         # Matches parseFilter(...).readAll() in the captured application.
         return await self.eval(f"parseFilter({quote(filter_text)}).readAll()")
 
+    async def read_point(self, ident, site_id):
+        if not REFERENCE.fullmatch(ident) or not REFERENCE.fullmatch(site_id):
+            raise ValueError("Invalid point reference")
+        rows = await self.read(f"id==@{ident} and siteRef==@{site_id}")
+        if len(rows) != 1 or reference(rows[0].get("id")) != ident:
+            raise ApiError("Zone point could not be read")
+        return rows[0]
+
     async def sites(self):
         return await self.read('siteModelId=="_site:site"')
 

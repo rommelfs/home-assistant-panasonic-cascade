@@ -1,0 +1,23 @@
+populate_dashboard:
+  name: Cascade-Dashboard befüllen
+  description: Befüllt ein zuvor angelegtes leeres Dashboard mit aktuellen Werten und Steuerungen der Cascade-Integration.
+  fields:
+    url_path:
+      name: Dashboard-Adresse
+      description: Der URL-Pfad des leeren Dashboards, zum Beispiel panasonic-cascade.
+      required: true
+      example: panasonic-cascade
+      selector:
+        text:
+    entry_id:
+      name: Installation
+      description: Optional auf einen Integrationseintrag beschränken. Leer lassen für alle Cascade-Installationen.
+      selector:
+        config_entry:
+          integration: panasonic_cascade
+    overwrite:
+      name: Vorhandene Dashboard-Konfiguration ersetzen
+      description: Nur aktivieren, wenn vorhandene Karten dieses Dashboards ersetzt werden sollen.
+      default: false
+      selector:
+        boolean:

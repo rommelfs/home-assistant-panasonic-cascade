@@ -4,6 +4,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import CascadeClient
 from .const import PLATFORMS
 from .coordinator import CascadeCoordinator
+from .dashboard import async_register_dashboard_service
 
 
 async def async_setup_entry(hass, entry):
@@ -13,6 +14,7 @@ async def async_setup_entry(hass, entry):
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    async_register_dashboard_service(hass)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 

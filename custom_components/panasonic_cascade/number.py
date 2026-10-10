@@ -23,7 +23,7 @@ class CascadeNumber(CascadeEntity, NumberEntity):
     def __init__(self, coordinator, ident):
         super().__init__(coordinator, ident)
         self._attr_unique_id += "|control"
-        self._attr_name += " | Set Default"
+        self._attr_name += " – Standardwert"
 
     @property
     def native_min_value(self):

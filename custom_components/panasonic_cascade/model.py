@@ -13,7 +13,9 @@ def model_key(row):
 
 def name(row):
     ident = row.get("id")
-    return (row.get("dis") or (ident.display if isinstance(ident, Ref) else "") or row.get("navName") or "Cascade point")
+    raw = row.get("dis") or (ident.display if isinstance(ident, Ref) else "") or row.get("navName") or "Cascade point"
+    # FIN display strings can contain empty hierarchy levels (leading pipes).
+    return " – ".join(part.strip() for part in str(raw).split("|") if part.strip()) or "Cascade point"
 
 
 def control_kind(row):
@@ -62,3 +64,25 @@ def state(row):
     raw = row.get("curVal")
     result = value(raw)
     return result if isinstance(result, (str, int, float, bool)) else None
+
+
+def zone_states(raw):
+    if raw not in ("Off/Off", "On/Off", "Off/On", "On/On"):
+        raise ValueError("Unknown zone status; no change sent")
+    return raw.split("/")
+
+
+def zone1_value(row, enabled):
+    if type(enabled) is not bool or model_key(row) != "zone1Zone2OnOffSetpoint" or control_kind(row) != "select":
+        raise ValueError("Zone control is not supported")
+    if row.get("curStatus") != "ok":
+        raise ValueError("Current zone status is unavailable")
+    current = zone_states(row.get("curVal"))
+    default = zone_states(row.get("writeDef"))
+    if current != default:
+        raise ValueError("A schedule or override is active; remove it in the controller before switching Zone 1")
+    current[0] = "On" if enabled else "Off"
+    target = "/".join(current)
+    if target not in enum_options(row):
+        raise ValueError("Requested zone combination is not supported")
+    return target
