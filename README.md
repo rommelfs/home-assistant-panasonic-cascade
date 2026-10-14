@@ -1,6 +1,6 @@
 # Panasonic Cascade / Smart Edge für Home Assistant
 
-Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.3.0 bereinigt die Anzeigenamen, ergänzt einen eigenen Zone-1-Schalter und einen Dashboard-Assistenten. Anmeldung mit Benutzername/Passwort und Projektauswahl sind seit 0.2.0 enthalten. Schreibzugriffe sind noch nicht an einer realen Anlage geprüft.
+Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.3.1 ergänzt eine abschaltbare Warmwasseransicht. Seit 0.3.0 gibt es bereinigte Anzeigenamen, einen eigenen Zone-1-Schalter und einen Dashboard-Assistenten. Anmeldung mit Benutzername/Passwort und Projektauswahl sind seit 0.2.0 enthalten. Schreibzugriffe sind noch nicht an einer realen Anlage geprüft.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade).
 
@@ -24,9 +24,19 @@ Bestehende cookiebasierte Einträge bleiben nutzbar. Zur Umstellung auf Benutzer
 
 Benutzername und Passwort werden in der Home-Assistant-Konfiguration gespeichert. Die automatisch ausgestellten Sitzungscookies und Attestierungsschlüssel werden nicht in die Konfiguration geschrieben. Zugangsdaten und Home-Assistant-Backups entsprechend schützen und nicht in GitHub oder diesen Chat kopieren.
 
-## Aktualisierung auf 0.3.0: Namen, Zone 1 und Dashboard
+## Warmwasseraufbereitung ausblenden (ab 0.3.1)
 
-In HACS Version **0.3.0** herunterladen (gegebenenfalls Vorabversionen anzeigen) und Home Assistant neu starten. Anzeigenamen enthalten jetzt keine senkrechten Striche mehr. Die eindeutigen Entitäts- und Gerätekennungen bleiben erhalten; bereits verwendete Entitäts-IDs und selbst vergebene Namen ändern sich nicht.
+In HACS auf **0.3.1** aktualisieren und Home Assistant neu starten. Unter **Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren** die Option **Warmwasseraufbereitung verwenden** abwählen und speichern. Die Integration lädt sich automatisch neu. Die Einstellung gilt pro Installation und ist zunächst eingeschaltet, damit bestehende Installationen ihre Werte behalten.
+
+Ausgeblendet werden reine Trinkwarmwasser-Speicherwerte und Bedienelemente, Sterilisation/Legionellenfunktionen, Warmwasser-COP sowie der reine Warmwasser-Verfügbarkeitsstatus. Heizungs-COP, Pufferspeicher einschließlich seiner Temperaturdifferenz, gemeinsame Wärmepumpenwerte, SG Ready und Zonensteuerung bleiben erhalten. Die Option ist eine Home-Assistant-Anzeigeeinstellung; sie sendet keinen Schaltbefehl und ändert keine Anlagenkonfiguration.
+
+Bereits vorhandene Warmwasserentitäten werden intern deaktiviert und ausgeblendet, damit ihre Kennungen und selbst vergebenen Namen erhalten bleiben. In Home Assistants vollständiger Entitätsverwaltung bleiben sie als deaktivierte Einträge auffindbar. Neue Warmwasserentitäten werden bei abgeschalteter Option nicht angelegt. Die normalen Dashboard- und Steuerungsansichten enthalten sie nicht mehr.
+
+Vorhandene native Dashboard-Karten werden von den passenden Warmwasserreferenzen bereinigt; reine Warmwasserkarten verschwinden. Beim erneuten Einschalten werden zuvor ausgeblendete Entitäten und unverändert gebliebene Dashboards wiederhergestellt. Selbst deaktivierte Entitäten bleiben deaktiviert. Wird ein Dashboard zwischenzeitlich bearbeitet oder neu befüllt, wird es beim Einschalten nicht überschrieben; dann kann das Cascade-Dashboard bei Bedarf erneut über `panasonic_cascade.populate_dashboard` befüllt werden. YAML-Dashboards und individuelle Karten mit eigenen Datenformaten müssen gegebenenfalls manuell angepasst werden.
+
+## Aktualisierung ab 0.3.0: Namen, Zone 1 und Dashboard
+
+In HACS Version **0.3.1** herunterladen (gegebenenfalls Vorabversionen anzeigen) und Home Assistant neu starten. Anzeigenamen enthalten jetzt keine senkrechten Striche mehr. Die eindeutigen Entitäts- und Gerätekennungen bleiben erhalten; bereits verwendete Entitäts-IDs und selbst vergebene Namen ändern sich nicht.
 
 ### Zone 1 schalten
 
@@ -92,7 +102,7 @@ Der Befehl ändert ausschließlich das lokale Manifest. Die Vorlage `validation-
 
 ## Prüfung und Grenzen
 
-Lokal bestanden: **49 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Dazu kommen Zone-1-Tests für alle Kombinationen, frische Abfragen, Übersteuerungen und gleichzeitige Bedienung sowie Dashboard-Tests einschließlich Speichern/Laden im echten Lovelace-Speicher. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden erfasst. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
+Lokal bestanden: **56 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Dazu kommen Zone-1-Tests für alle Kombinationen, frische Abfragen, Übersteuerungen und gleichzeitige Bedienung sowie Dashboard-Tests einschließlich Speichern/Laden im echten Lovelace-Speicher. Weitere Tests prüfen Warmwasserfilterung über alle Plattformen, Optionen, das Ausblenden/Wiederherstellen vorhandener Dashboards und den Erhalt eigener Änderungen. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden erfasst. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
 
 ```sh
 # Für den vollständigen Testumfang Python 3.14 verwenden.

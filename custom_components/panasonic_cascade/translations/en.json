@@ -59,11 +59,12 @@
     "step": {
       "init": {
         "title": "Polling and controls",
-        "description": "Controls change FIN default values. Schedules and manual overrides may take precedence. Writes have not been verified against real hardware.",
+        "description": "Controls change FIN default values. Schedules and manual overrides may take precedence. Writes have not been verified against real hardware. Disable domestic hot water to hide its sensors and controls. This does not change controller operation.",
         "data": {
           "scan_interval": "Polling interval (seconds)",
           "enable_controls": "Enable controls (experimental)",
-          "verify_ssl": "Verify HTTPS certificate"
+          "verify_ssl": "Verify HTTPS certificate",
+          "use_dhw": "Use domestic hot water"
         }
       }
     }

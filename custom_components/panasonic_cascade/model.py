@@ -86,3 +86,28 @@ def zone1_value(row, enabled):
     if target not in enum_options(row):
         raise ValueError("Requested zone combination is not supported")
     return target
+
+
+def is_dhw(row, field="curVal", rows=None):
+    """Pure domestic hot water; a heating buffer tank is deliberately retained."""
+    if field == "isAvailableTank":
+        return True
+    seen = set()
+    while row:
+        key = model_key(row).casefold()
+        if row.get("tankModelId") or key.startswith(("dhw", "bivalentdhw")) or "sterilization" in key:
+            return True
+        parent = row.get("equipRef")
+        ident = parent.id if isinstance(parent, Ref) else None
+        if not rows or not ident or ident in seen:
+            break
+        seen.add(ident)
+        row = rows.get(ident, {})
+    return False
+
+
+def visible_data(rows, use_dhw=True):
+    if use_dhw:
+        return rows
+    return {ident: {key: val for key, val in row.items() if key != "isAvailableTank"}
+            for ident, row in rows.items() if not is_dhw(row, rows=rows)}

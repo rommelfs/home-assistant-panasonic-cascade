@@ -7,7 +7,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import ApiError, AuthError
-from .model import zone1_value
+from .model import zone1_value, visible_data
 
 LOGGER = logging.getLogger(__name__)
 
@@ -22,7 +22,8 @@ class CascadeCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         try:
-            return await self.client.snapshot(self.entry.data["site_id"])
+            self.all_data = await self.client.snapshot(self.entry.data["site_id"])
+            return visible_data(self.all_data, self.entry.options.get("use_dhw", True))
         except AuthError as err:
             raise ConfigEntryAuthFailed("FIN session must be renewed") from err
         except ApiError as err:

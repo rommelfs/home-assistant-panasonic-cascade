@@ -148,10 +148,11 @@ class CascadeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class CascadeOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         if user_input is not None:
-            return self.async_create_entry(title='', data=user_input)
+            return self.async_create_entry(title='', data={**self.config_entry.options, **user_input})
         d = self.config_entry.options
         return self.async_show_form(step_id='init', data_schema=vol.Schema({
             vol.Required('scan_interval', default=d.get('scan_interval', 30)): vol.All(vol.Coerce(int), vol.Range(min=15, max=300)),
             vol.Required('enable_controls', default=d.get('enable_controls', False)): bool,
+            vol.Required('use_dhw', default=d.get('use_dhw', True)): bool,
             vol.Required('verify_ssl', default=d.get('verify_ssl', self.config_entry.data.get('verify_ssl', True))): bool,
         }))

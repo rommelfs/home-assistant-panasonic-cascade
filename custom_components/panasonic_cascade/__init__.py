@@ -5,6 +5,7 @@ from .api import CascadeClient
 from .const import PLATFORMS
 from .coordinator import CascadeCoordinator
 from .dashboard import async_register_dashboard_service
+from .visibility import async_apply_dhw_visibility
 
 
 async def async_setup_entry(hass, entry):
@@ -12,6 +13,7 @@ async def async_setup_entry(hass, entry):
     client = CascadeClient(async_get_clientsession(hass, verify_ssl=config.get("verify_ssl", True)), config)
     coordinator = CascadeCoordinator(hass, entry, client)
     await coordinator.async_config_entry_first_refresh()
+    await async_apply_dhw_visibility(hass, entry, coordinator.all_data)
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_register_dashboard_service(hass)
