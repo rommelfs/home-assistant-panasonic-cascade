@@ -11,5 +11,26 @@ NUMBER_CONTROLS = {
     "zone1WaterTemperatureColdSetpoint": (5, 25),
     "tankWaterTempSpBeforeSgReady": (40, 60),
 }
-STATUS_FIELDS = ("isConnected", "isOn", "isRunning", "isInAlarm", "isAvailableBuffer", "isAvailableTank", "run", "isEnabled")
-COUNT_FIELDS = ("runningUnitsAmount", "requiredUnitsAmount", "availableUnitsAmount", "configuredUnitsAmount")
+STATUS_FIELDS = ("isConnected", "isOn", "isRunning", "isInAlarm", "isAvailableBuffer", "isAvailableTank", "run", "isEnabled", "isRunningBuffer", "isRunningTank", "runRequestBuffer")
+COUNT_FIELDS = ("runningUnitsAmount", "requiredUnitsAmount", "availableUnitsAmount", "configuredUnitsAmount", "runningUnitsAmountHot", "runningUnitsAmountCold", "numberOfZones")
+
+CONFIG_FIELDS = {'oduModel': 'Außengeräte-Modell',
+ 'iduModel': 'Innengeräte-Modell',
+ 'modelSeriesSelection': 'Modellserie',
+ 'outdoorType': 'Außengerätetyp',
+ 'capacityRank': 'Nennleistung',
+ 'loopsControlType': 'Regelung der Kreise',
+ 'waterTempSpOffsetHeat': 'Heizen – Sollwertverschiebung',
+ 'waterTempSpOffsetCool': 'Kühlen – Sollwertverschiebung',
+ 'pidConstProportionale': 'Kaskade – PID-Proportionalanteil',
+ 'pidConstIntegral': 'Kaskade – PID-Integralanteil',
+ 'stagingDelayUp': 'Kaskade – Zuschaltverzögerung',
+ 'stagingDelayDown': 'Kaskade – Abschaltverzögerung',
+ 'minNumberRunningUnits': 'Kaskade – Mindestanzahl Geräte',
+ 'maxNumberRunningUnits': 'Kaskade – Höchstanzahl Geräte',
+ 'targetTimeHot': 'Heizen – Zielzeit',
+ 'targetTimeCold': 'Kühlen – Zielzeit',
+ 'deltaTempToStartHot': 'Heizen – Einschaltdifferenz',
+ 'deltaTempToStartCold': 'Kühlen – Einschaltdifferenz',
+ 'deltaTempToStartAllHot': 'Heizen – Differenz für alle Geräte',
+ 'deltaTempToStartAllCold': 'Kühlen – Differenz für alle Geräte'}

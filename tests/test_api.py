@@ -100,11 +100,11 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(s.calls), 2)
 
     async def test_power_summary_preserves_kw(self):
-        s = Session([Response(200, 'ver:"3.0"\nid,point,kind,curVal\n@p:demo:r:t,M,"Number",31°C\n'), Response(200, 'ver:"3.0"\nval\n13.628kW\n'), Response(200, 'ver:"3.0"\nval\n4.111kW\n')])
+        s = Session([Response(200, 'ver:"3.0"\nid,point,kind,curVal\n@p:demo:r:t,M,"Number",31°C\n'), Response(200, 'ver:"3.0"\nval\n13.628kW\n'), Response(200, 'ver:"3.0"\nval\n4.111kW\n'), Response(403)])
         rows = await client(s).snapshot('p:demo:r:site')
         self.assertEqual(rows['summary:generatedPower']['curVal'], zinc.Number(13.628, 'kW'))
         self.assertEqual(rows['summary:consumedPower']['unit'], 'kW')
-        self.assertEqual(len(s.calls), 3)
+        self.assertEqual(len(s.calls), 4)
 
     async def test_config_and_secret_validation(self):
         for overrides in ({'url':'http://controller.invalid'}, {'url':'https://user:pass@controller.invalid'}, {'project':'../other'}, {'session_cookie':'token\r\nInjected: header'}, {'session_cookie':'', 'bearer_token':''}):

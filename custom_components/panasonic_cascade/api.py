@@ -2,12 +2,14 @@
 import asyncio
 import math
 import re
+import time
 from urllib.parse import urlsplit, urlunsplit
 from http.cookies import SimpleCookie
 
 import aiohttp
 
 from .auth import AuthProtocolError, Scram, add_handshake, challenge, encode, hash_name, hmac_header, params
+from .diagnostics import queries, convert
 from .model import bounds, control_kind, enum_options
 from .zinc import MARKER, Number, Ref, REFERENCE, ZincError, parse_grids, quote, reference
 
@@ -54,6 +56,9 @@ class CascadeClient:
         self.cookies = SimpleCookie()
         self.authenticated = not bool(self.username)
         self.lock = asyncio.Lock()
+        self.use_dhw = config.get("use_dhw", True)
+        self._detail_cache = {}
+        self._details_at = {}
 
     @staticmethod
     def _validate_project(project):
@@ -148,15 +153,23 @@ class CascadeClient:
                     self.headers.pop(key, None)
 
     async def eval(self, expression, project=None):
+        return (await self._eval_request([expression], "eval", project))[0]
+
+    async def eval_all(self, expressions):
+        if not expressions:
+            return []
+        return await self._eval_request(expressions, "evalAll")
+
+    async def _eval_request(self, expressions, operation, project=None):
         project = project or self.project
         self._validate_project(project)
-        payload = ('ver:"3.0"\nexpr\n' + quote(expression) + '\n').encode()
+        payload = ('ver:"3.0"\nexpr\n' + ''.join(quote(expr) + '\n' for expr in expressions)).encode()
         async with self.lock:
             if not self.authenticated:
                 await self._login()
             # Retry only an explicit expired/rejected session, at most once.
             for attempt in range(2):
-                status, headers, text = await self._request('POST', f'/api/{project}/eval', data=payload)
+                status, headers, text = await self._request('POST', f'/api/{project}/{operation}', data=payload)
                 auth_failure = (status in (301, 302, 303, 307, 308, 401) or
                                 text.lstrip().lower().startswith(('<!doctype', '<html')) or
                                 bool(re.search(r'errType:"[^"\n]*(?:AuthErr|AuthenticationErr)', text)))
@@ -168,12 +181,12 @@ class CascadeClient:
                 if status != 200:
                     raise ApiError(f'FIN HTTP status {status}')
                 try:
-                    grids = parse_grids(text)
+                    grids = parse_grids(text, allow_errors=operation == "evalAll")
                 except ZincError as err:
                     raise ApiError('FIN response could not be decoded') from err
-                if len(grids) != 1:
+                if len(grids) != len(expressions):
                     raise ApiError('Unexpected number of response grids')
-                return grids[0]
+                return grids
         raise AuthError('Session renewal failed')
 
     async def projects(self):
@@ -207,14 +220,37 @@ class CascadeClient:
             try:
                 summary = await self.eval(f"panEval(`/plantOverview/units/energy/{path}`, {{siteId:@{site_id}}})")
                 raw = summary[0].get("val") if summary else None
-            except ApiError:
+            except (ApiError, AuthError):
                 raw = None
             ident = f"summary:{key}"
             result[ident] = {"id": Ref(ident, label), "point": MARKER,
                              "kind": "Number", "curVal": raw,
                              "curStatus": "ok" if isinstance(raw, Number) else "fault",
                              "siteRef": Ref(site_id), "unit": raw.unit if isinstance(raw, Number) else "kW"}
+        await self._enrich(result, site_id)
         return result
+
+    async def _enrich(self, result, site_id):
+        now = time.monotonic()
+        details = site_id not in self._details_at or now - self._details_at[site_id] >= 300
+        specs = queries(site_id, result, details)
+        try:
+            grids = await self.eval_all([spec[5] for spec in specs])
+        except (ApiError, AuthError):
+            # Missing optional views/permissions never turn off core point polling.
+            grids = [None] * len(specs)
+        cached = self._detail_cache.setdefault(site_id, {})
+        if details:
+            cached.clear()
+            self._details_at[site_id] = now
+        for spec, grid in zip(specs, grids):
+            converted = convert(spec, grid, site_id, result, self.use_dhw)
+            if spec[6] in ("details", "history"):
+                cached.update(converted)
+            else:
+                result.update(converted)
+        result.update({ident: row for ident, row in cached.items()
+                       if not row.get("equipRef") or reference(row["equipRef"]) in result})
 
     async def set_default(self, row, new_value):
         kind = control_kind(row)

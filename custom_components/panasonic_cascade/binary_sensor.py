@@ -3,7 +3,7 @@ from homeassistant.components.binary_sensor import BinarySensorDeviceClass, Bina
 
 from .const import STATUS_FIELDS
 from .entity import CascadeEntity
-from .model import state
+from .model import state, model_key
 from .zinc import MARKER
 
 
@@ -21,7 +21,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class CascadeBinarySensor(CascadeEntity, BinarySensorEntity):
     def __init__(self, coordinator, ident, field="curVal"):
         super().__init__(coordinator, ident, field)
-        if field == "isInAlarm":
+        if field == "isInAlarm" or (field == "curVal" and model_key(row) == "errorStatus"):
             self._attr_device_class = BinarySensorDeviceClass.PROBLEM
         elif field == "isConnected":
             self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY

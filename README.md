@@ -1,6 +1,6 @@
 # Panasonic Cascade / Smart Edge für Home Assistant
 
-Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.3.1 ergänzt eine abschaltbare Warmwasseransicht. Seit 0.3.0 gibt es bereinigte Anzeigenamen, einen eigenen Zone-1-Schalter und einen Dashboard-Assistenten. Anmeldung mit Benutzername/Passwort und Projektauswahl sind seit 0.2.0 enthalten. Schreibzugriffe sind noch nicht an einer realen Anlage geprüft.
+Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.4.0 ergänzt Geräte- und Energiedetails sowie eine Alarmansicht anhand neuer HAR-Aufzeichnungen. Seit 0.3.1 ist die Warmwasseransicht abschaltbar. Seit 0.3.0 gibt es bereinigte Anzeigenamen, einen eigenen Zone-1-Schalter und einen Dashboard-Assistenten. Anmeldung mit Benutzername/Passwort und Projektauswahl sind seit 0.2.0 enthalten. Schreibzugriffe sind noch nicht an einer realen Anlage geprüft.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade).
 
@@ -24,9 +24,30 @@ Bestehende cookiebasierte Einträge bleiben nutzbar. Zur Umstellung auf Benutzer
 
 Benutzername und Passwort werden in der Home-Assistant-Konfiguration gespeichert. Die automatisch ausgestellten Sitzungscookies und Attestierungsschlüssel werden nicht in die Konfiguration geschrieben. Zugangsdaten und Home-Assistant-Backups entsprechend schützen und nicht in GitHub oder diesen Chat kopieren.
 
+## Neue Geräte-, Energie- und Alarmdaten (0.4.0)
+
+Nach dem HACS-Update Home Assistant neu starten. Vorhandene Entitätskennungen bleiben erhalten. Neue Punkte werden beim Laden erkannt. Für die zusätzlichen Dashboard-Ansichten **Energie** und **Alarme** das Cascade-Dashboard erneut befüllen:
+
+```yaml
+action: panasonic_cascade.populate_dashboard
+data:
+  url_path: panasonic-cascade
+  overwrite: true
+```
+
+Dabei werden individuelle Karten dieses Dashboards ersetzt. Andere Dashboards bleiben bestehen. Die ausgeschaltete Warmwasseroption wird auch für die neuen Gerätedaten berücksichtigt.
+
+- **Je Wärmepumpe:** aufgenommene elektrische und erzeugte thermische Leistung aus der Detailansicht, minimale/maximale Betriebsstunden, Fehlercode der Regleranzeige sowie zusätzliche vom Regler gelieferte Punkte wie Betriebsanforderung, Fehlerstatus, Leistungsanteile und Solltemperaturen. Bereits vorhandene COP-, Druck- und Temperaturpunkte bleiben bestehen.
+- **Energiezähler:** Die neuen Daten enthalten echte kWh-Zähler für Heizen, Warmwasser und Kühlen/Wärmerückgewinnung. Nur Energiepunkte mit ausdrücklicher `hisTotalized`-Kennzeichnung erhalten `total_increasing`; kW/W bleiben Leistung. Diese Zähler sind dadurch für passende Home-Assistant-Energieauswertungen verwendbar. Tagesstatistiken entstehen erst durch Home Assistants Aufzeichnung nach dem Update. Es wird keine frühere Energiehistorie importiert. Die vom Regler gelieferte Rohleistung und die berechnete Leistung der Detailansicht können abweichen; die Integration führt diese Anzeigen nicht zu einer neuen Summe zusammen.
+- **Geräteparameter:** konfigurierte Zonen, maximale Solltemperaturen, Sensortypen/Regelungstypen, Speicheranschlüsse, Nennleistung und Modellcodes werden zusätzlich als Diagnosewerte gelesen. Vorhandene Modellbezeichnungen, PID- und Kaskadenparameter, Zuschalt-/Abschaltverzögerungen sowie Sollwertverschiebungen werden aus den Geräte- und Anlagendatensätzen angezeigt. Codes ohne bestätigte Zuordnung werden als Codes bezeichnet. Diese neuen Konfigurationsdaten sind ausschließlich lesbar; daraus entstehen keine zusätzlichen Schalt- oder Inbetriebnahmeaktionen.
+- **Alarme:** Anzahl aktueller Alarme, Anzahl der Alarmdatensätze im letzten Jahr und letzter Alarm. Attribute und Dashboard zeigen maximal 20 Einträge mit Zeit, Gerät, Text und Status. Historische, bereits normale Alarme werden nicht als aktuell aktive Alarme ausgegeben. Ein numerischer Rohfehlercode allein wird ebenfalls nicht als aktiver Alarm interpretiert. Es gibt keine Quittierungs- oder Löschaktionen. Reine Warmwasseralarme werden bei abgeschalteter Warmwasseransicht ausgefiltert, soweit ihr Zielgerät über die Anlagenmetadaten zugeordnet werden kann.
+- **Messqualität:** Der vom Regler als Temperatur gelieferte Wert `−32768` wird als fehlender Messwert behandelt. Andere Werte wie die aufgezeichneten `−78 °C` bleiben unverändert und müssen an der Anlage geprüft werden.
+
+Die optionalen aktuellen Detailwerte werden zusammen in einer `evalAll`-Anfrage pro Abfrageintervall gelesen. Geräteparameter und Alarmverlauf werden innerhalb dieser Anfrage nur alle fünf Minuten neu abgefragt. Nicht unterstützte oder nicht berechtigte optionale Abfragen lassen die normalen Punktabfragen weiterlaufen. Eine fehlgeschlagene Alarmabfrage erscheint als nicht verfügbar und wird nicht als „keine Alarme“ ausgegeben. Wetterprognosen, Rohkurven und vollständige Controller-Historien werden nicht in Home Assistants Recorder nachgetragen.
+
 ## Warmwasseraufbereitung ausblenden (ab 0.3.1)
 
-In HACS auf **0.3.1** aktualisieren und Home Assistant neu starten. Unter **Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren** die Option **Warmwasseraufbereitung verwenden** abwählen und speichern. Die Integration lädt sich automatisch neu. Die Einstellung gilt pro Installation und ist zunächst eingeschaltet, damit bestehende Installationen ihre Werte behalten.
+In HACS auf **0.4.0** aktualisieren und Home Assistant neu starten. Unter **Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren** die Option **Warmwasseraufbereitung verwenden** abwählen und speichern. Die Integration lädt sich automatisch neu. Die Einstellung gilt pro Installation und ist zunächst eingeschaltet, damit bestehende Installationen ihre Werte behalten.
 
 Ausgeblendet werden reine Trinkwarmwasser-Speicherwerte und Bedienelemente, Sterilisation/Legionellenfunktionen, Warmwasser-COP sowie der reine Warmwasser-Verfügbarkeitsstatus. Heizungs-COP, Pufferspeicher einschließlich seiner Temperaturdifferenz, gemeinsame Wärmepumpenwerte, SG Ready und Zonensteuerung bleiben erhalten. Die Option ist eine Home-Assistant-Anzeigeeinstellung; sie sendet keinen Schaltbefehl und ändert keine Anlagenkonfiguration.
 
@@ -36,7 +57,7 @@ Vorhandene native Dashboard-Karten werden von den passenden Warmwasserreferenzen
 
 ## Aktualisierung ab 0.3.0: Namen, Zone 1 und Dashboard
 
-In HACS Version **0.3.1** herunterladen (gegebenenfalls Vorabversionen anzeigen) und Home Assistant neu starten. Anzeigenamen enthalten jetzt keine senkrechten Striche mehr. Die eindeutigen Entitäts- und Gerätekennungen bleiben erhalten; bereits verwendete Entitäts-IDs und selbst vergebene Namen ändern sich nicht.
+In HACS Version **0.4.0** herunterladen (gegebenenfalls Vorabversionen anzeigen) und Home Assistant neu starten. Anzeigenamen enthalten jetzt keine senkrechten Striche mehr. Die eindeutigen Entitäts- und Gerätekennungen bleiben erhalten; bereits verwendete Entitäts-IDs und selbst vergebene Namen ändern sich nicht.
 
 ### Zone 1 schalten
 
@@ -102,7 +123,7 @@ Der Befehl ändert ausschließlich das lokale Manifest. Die Vorlage `validation-
 
 ## Prüfung und Grenzen
 
-Lokal bestanden: **56 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Dazu kommen Zone-1-Tests für alle Kombinationen, frische Abfragen, Übersteuerungen und gleichzeitige Bedienung sowie Dashboard-Tests einschließlich Speichern/Laden im echten Lovelace-Speicher. Weitere Tests prüfen Warmwasserfilterung über alle Plattformen, Optionen, das Ausblenden/Wiederherstellen vorhandener Dashboards und den Erhalt eigener Änderungen. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden erfasst. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
+Lokal bestanden: **68 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Dazu kommen Zone-1-Tests für alle Kombinationen, frische Abfragen, Übersteuerungen und gleichzeitige Bedienung sowie Dashboard-Tests einschließlich Speichern/Laden im echten Lovelace-Speicher. Weitere Tests prüfen Warmwasserfilterung über alle Plattformen, Optionen, das Ausblenden/Wiederherstellen vorhandener Dashboards und den Erhalt eigener Änderungen. Ergänzend geprüft: optionale Mehrfachabfragen mit einzelnen Fehlern, Detailcache, Alarmverlauf ohne Benutzer-/Auditdaten, Energie-Statistiken, Temperatur-Sentinel und neue Dashboard-Ansichten. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden in den ursprünglichen Aufzeichnungen erfasst. Die neun zusätzlichen HAR-Dateien aus dem Webinterface wurden mit 3.675 Grids / 7.362 Zeilen wiedergegeben; sie enthalten 103 eindeutige Punktdatensätze. Alle 18 neu verwendeten Detailabfragen konnten zu aufgezeichneten Antworten zugeordnet werden. `point-inventory.json` enthält dafür nur generische Modellkennungen, Feldbezeichnungen und Einheiten, keine Anlagenkennungen oder Messwerte. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
 
 ```sh
 # Für den vollständigen Testumfang Python 3.14 verwenden.
@@ -114,6 +135,6 @@ python3 replay_har.py /PFAD/overview.har /PFAD/settings.har
 
 Die Authentifizierungstests verwenden echte lokale HTTP-Anfragen mit erfundenen Konten und prüfen vollständigen Login, Cookie/Attestierung, mehrere Projekte, abgelaufene Sitzungen und fehlerhafte Zugangsdaten. Die SCRAM-Berechnung ist zusätzlich mit dem öffentlichen SHA-256-Testvektor aus RFC 7677 geprüft. Sie sind kein erfolgreicher Hardwaretest. Für den vollständigen Testumfang `requirements-dev.txt` installieren. Ohne `aiohttp` werden die lokalen Transporttests, ohne Home Assistant die Einrichtungstests übersprungen. Home Assistant liefert `aiohttp` zur Laufzeit selbst. Ein kompletter laufender Home-Assistant-Eintrag mit angeschlossener Anlage ist noch nicht geprüft.
 
-Bei Änderungen der Anlagenstruktur die Integration neu laden, um neue Punkte zu erkennen. Keine automatische History-Übernahme, kein COP aus den Leistungswerten, kein Climate-Entity und keine Browsersteuerung. Die Login-HAR enthält den Login-Bildschirm und seinen JavaScript-Code, aber nicht den abgeschickten Challenge-Austausch. Die Implementierung ist daher gegen Testserver geprüft und muss an der tatsächlichen Installation bestätigt werden.
+Bei Änderungen der Anlagenstruktur die Integration neu laden, um neue Punkte zu erkennen. Keine automatische History-Übernahme, kein selbst errechneter COP aus den Leistungswerten, kein Climate-Entity und keine Browsersteuerung. Die Login-HAR enthält den Login-Bildschirm und seinen JavaScript-Code, aber nicht den abgeschickten Challenge-Austausch. Die Implementierung ist daher gegen Testserver geprüft und muss an der tatsächlichen Installation bestätigt werden.
 
 Quellen für die Implementierung: bereitgestellte HAR-Dateien, [Haystack Zinc](https://project-haystack.org/doc/docHaystack/Zinc), [Haystack Auth](https://project-haystack.org/doc/docHaystack/Auth), [SCRAM-SHA-256 / RFC 7677](https://www.rfc-editor.org/rfc/rfc7677), [Home-Assistant-Konfigurationsdialog](https://developers.home-assistant.io/docs/core/integration/config_flow/), [DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data/), [HACS-Anforderungen](https://www.hacs.dev/docs/publish/integration/).

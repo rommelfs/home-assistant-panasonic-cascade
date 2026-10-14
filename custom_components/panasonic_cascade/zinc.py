@@ -100,16 +100,22 @@ def scalar(token):
     return token
 
 
-def parse_grids(text):
+def parse_grids(text, allow_errors=False):
     grids, rows, columns = [], None, None
     for line in split_top_level(text.strip(), "\n"):
         if not line:
             continue
         if line.startswith('ver:"3.0"'):
             if re.search(r"(?:^|\s)err(?:\s|$|:)", line):
-                raise ZincError("FIN returned an error grid")
+                if not allow_errors:
+                    raise ZincError("FIN returned an error grid")
+                rows, columns = None, []
+                grids.append(None)
+                continue
             rows, columns = [], None
             grids.append(rows)
+        elif rows is None and grids and grids[-1] is None:
+            continue
         elif rows is None:
             raise ZincError("Expected Zinc 3.0 grid")
         elif columns is None:

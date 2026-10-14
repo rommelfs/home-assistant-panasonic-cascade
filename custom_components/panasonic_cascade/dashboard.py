@@ -25,7 +25,7 @@ def build_dashboard(hass, entry_id=None):
                        and not entity.disabled and not entity.hidden), key=lambda entity: entity.entity_id)
     if not entities:
         raise HomeAssistantError("No enabled Cascade entities found; load the integration first")
-    groups, controls, overview, temperatures, power = {}, [], [], [], []
+    groups, controls, overview, temperatures, power, energy, alarms, efficiency, statistical_energy = {}, [], [], [], [], [], [], [], []
     for entity in entities:
         label = entity.name or name({"dis": entity.original_name or entity.entity_id})
         row = {"entity": entity.entity_id, "name": label}
@@ -37,9 +37,18 @@ def build_dashboard(hass, entry_id=None):
             controls.append(row)
         state = hass.states.get(entity.entity_id)
         unit = state.attributes.get("unit_of_measurement") if state else entity.unit_of_measurement
-        if entity.domain == "sensor" and unit in ("W", "kW"):
+        diagnostic = getattr(entity, "entity_category", None) == "diagnostic"
+        if entity.domain == "sensor" and unit in ("Wh", "kWh"):
+            energy.append(row)
+            if state and state.attributes.get("state_class") == "total_increasing":
+                statistical_energy.append(row)
+        if entity.domain == "sensor" and 'cop' in (entity.original_name or label).casefold():
+            efficiency.append(row)
+        if any(f"|summary:{key}|" in entity.unique_id for key in ("activeAlarms", "alarmHistory", "lastAlarm")):
+            alarms.append(row)
+        if entity.domain == "sensor" and not diagnostic and unit in ("W", "kW"):
             power.append(row)
-        if entity.domain == "sensor" and unit in ("°C", "°F") and not any(
+        if entity.domain == "sensor" and not diagnostic and unit in ("°C", "°F") and not any(
             word in label.casefold() for word in ("setpoint", "soll", "curve", "max", "min")):
             temperatures.append(row)
         if entity.domain == "binary_sensor" and any(
@@ -50,7 +59,7 @@ def build_dashboard(hass, entry_id=None):
         cards.append({"type": "entities", "title": "Steuerung", "show_header_toggle": False, "entities": controls})
     else:
         cards.append({"type": "markdown", "content": "**Steuerung aktivieren:** Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren → Steuerungen aktivieren. Anschließend dieses Dashboard erneut befüllen."})
-    for title, rows in (("Leistung", power), ("Aktuelle Temperaturen", temperatures), ("Betriebszustand", overview)):
+    for title, rows in (("Leistung", power), ("Aktuelle Temperaturen", temperatures), ("Betriebszustand", overview), ("Alarme", alarms), ("COP", efficiency)):
         if rows:
             cards.append({"type": "entities", "title": title, "show_header_toggle": False, "entities": rows})
     if temperatures:
@@ -62,10 +71,32 @@ def build_dashboard(hass, entry_id=None):
                       "entities": [row for rows in groups.values() for row in rows if row not in controls]})
     details = [{"type": "entities", "title": group, "show_header_toggle": False, "entities": rows}
                for (_, _, group), rows in sorted(groups.items(), key=lambda item: str(item[0]))]
-    return {"title": "Panasonic Cascade", "views": [
+    views = [
         {"title": "Übersicht", "path": "overview", "icon": "mdi:heat-pump", "cards": cards},
         {"title": "Alle Werte", "path": "details", "icon": "mdi:format-list-bulleted", "cards": details},
-    ]}
+    ]
+    if energy:
+        energy_cards = [{"type":"entities", "title":"Energiezähler", "show_header_toggle":False, "entities":energy}]
+        if statistical_energy:
+            energy_cards.append({"type":"statistics-graph", "title":"Energie pro Tag", "chart_type":"bar", "period":"day",
+                                 "days_to_show":7, "stat_types":["change"], "entities":[row["entity"] for row in statistical_energy]})
+        views.append({"title":"Energie", "path":"energy", "icon":"mdi:lightning-bolt", "cards":energy_cards})
+    if alarms:
+        cards = [{"type":"entities", "title":"Alarme und Verlauf", "show_header_toggle":False, "entities":alarms}]
+        for row in alarms:
+            entity_id = row["entity"]
+            registry_entry = registry.entities[entity_id]
+            if not any(f"|summary:{key}|" in registry_entry.unique_id for key in ("activeAlarms", "alarmHistory")):
+                continue
+            content = "{% set alarms = state_attr('" + entity_id + "', 'alarms') %}\n" + (
+                "{% if alarms is none %}Daten nicht verfügbar."
+                "{% elif not alarms %}Keine Einträge."
+                "{% else %}{% for alarm in alarms %}\n"
+                "- {{ alarm.time or 'Zeit unbekannt' }} · {{ alarm.equipment }}: {{ alarm.text }} ({{ alarm.status }})\n"
+                "{% endfor %}{% endif %}")
+            cards.append({"type":"markdown", "title":row["name"], "content":content})
+        views.append({"title":"Alarme", "path":"alarms", "icon":"mdi:alert-circle-outline", "cards":cards})
+    return {"title":"Panasonic Cascade", "views":views}
 
 
 async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False):

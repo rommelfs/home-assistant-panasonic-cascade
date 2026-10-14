@@ -1,16 +1,19 @@
 """Expose numeric and text points plus equipment mode and counters."""
+from homeassistant.helpers.entity import EntityCategory
+
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 
-from .const import COUNT_FIELDS
+from .const import COUNT_FIELDS, CONFIG_FIELDS
 from .entity import CascadeEntity
-from .model import state, unit
-from .zinc import MARKER, value
+from .model import state, unit, model_key
+from .zinc import MARKER, Number, value
 
 UNIT_CLASS = {
     "°C": SensorDeviceClass.TEMPERATURE, "°F": SensorDeviceClass.TEMPERATURE,
     "kW": SensorDeviceClass.POWER, "W": SensorDeviceClass.POWER,
     "kWh": SensorDeviceClass.ENERGY, "Wh": SensorDeviceClass.ENERGY,
     "Hz": SensorDeviceClass.FREQUENCY, "A": SensorDeviceClass.CURRENT,
+    "h": SensorDeviceClass.DURATION, "min": SensorDeviceClass.DURATION,
     "V": SensorDeviceClass.VOLTAGE, "bar": SensorDeviceClass.PRESSURE,
     "%RH": SensorDeviceClass.HUMIDITY,
 }
@@ -23,7 +26,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
         if row.get("point") is MARKER and row.get("kind") in ("Number", "Str"):
             entities.append(CascadeSensor(coordinator, ident))
         if row.get("equip") is MARKER:
-            for field in ("mode", *COUNT_FIELDS):
+            for field in ("mode", *COUNT_FIELDS, *CONFIG_FIELDS):
                 if row.get(field) is not None:
                     entities.append(CascadeSensor(coordinator, ident, field))
     async_add_entities(entities)
@@ -33,13 +36,23 @@ class CascadeSensor(CascadeEntity, SensorEntity):
     def __init__(self, coordinator, ident, field="curVal"):
         super().__init__(coordinator, ident, field)
         row = coordinator.data[ident]
-        if field == "curVal" and row.get("kind") == "Number":
-            u = unit(row)
+        diagnostic = field in CONFIG_FIELDS or row.get("diagnostic") is MARKER or model_key(row) in ("errorCodeConnected", "errorCode")
+        if diagnostic:
+            self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        if (field == "curVal" and row.get("kind") == "Number") or isinstance(row.get(field), Number):
+            u = unit(row) if field == "curVal" else row[field].unit
             self._attr_native_unit_of_measurement = "%" if u == "%RH" else u or None
             self._attr_device_class = UNIT_CLASS.get(u)
             # Do not infer cumulative energy statistics from ambiguous energy tags.
-            if self._attr_device_class != SensorDeviceClass.ENERGY:
+            if self._attr_device_class == SensorDeviceClass.ENERGY:
+                if row.get("hisTotalized") is MARKER:
+                    self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+            elif not diagnostic:
                 self._attr_state_class = SensorStateClass.MEASUREMENT
+
+    @property
+    def extra_state_attributes(self):
+        return self.row.get("attributes") or None
 
     @property
     def native_value(self):

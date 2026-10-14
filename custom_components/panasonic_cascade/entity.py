@@ -2,8 +2,8 @@
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
-from .model import name
+from .const import DOMAIN, CONFIG_FIELDS
+from .model import name, invalid_temperature, model_key, POINT_LABELS
 from .zinc import reference
 
 FIELD_NAMES = {
@@ -12,8 +12,12 @@ FIELD_NAMES = {
     "configuredUnitsAmount": "Konfigurierte Geräte", "isConnected": "Verbunden",
     "isOn": "Eingeschaltet", "isRunning": "In Betrieb", "isInAlarm": "Alarm",
     "isAvailableBuffer": "Puffer verfügbar", "isAvailableTank": "Warmwasser verfügbar",
-    "run": "In Betrieb", "isEnabled": "Aktiviert",
+    "run": "In Betrieb", "isEnabled": "Aktiviert", "isRunningBuffer": "Heizpuffer in Betrieb",
+    "isRunningTank": "Warmwasser in Betrieb", "runRequestBuffer": "Heizanforderung",
+    "runningUnitsAmountHot": "Laufende Geräte – Heizen", "runningUnitsAmountCold": "Laufende Geräte – Kühlen",
+    "numberOfZones": "Konfigurierte Zonen",
 }
+FIELD_NAMES.update(CONFIG_FIELDS)
 
 
 class CascadeEntity(CoordinatorEntity):
@@ -24,6 +28,8 @@ class CascadeEntity(CoordinatorEntity):
         row = coordinator.data[ident]
         self._attr_unique_id = f"{coordinator.entry.unique_id}|{ident}|{field}"
         self._attr_name = name(row) + (f" – {FIELD_NAMES.get(field, field)}" if field != "curVal" else "")
+        if model_key(row) in POINT_LABELS and reference(row.get("heatPumpRef")) in coordinator.data:
+            self._attr_name = name(coordinator.data[reference(row["heatPumpRef"])]) + " – " + self._attr_name
         self._attr_has_entity_name = False
         site = coordinator.entry.data["site_id"]
         parent = reference(row.get("equipRef")) or (ident if row.get("heatPumpModelId") or row.get("equip") else site)
@@ -40,4 +46,4 @@ class CascadeEntity(CoordinatorEntity):
 
     @property
     def available(self):
-        return super().available and self.ident in self.coordinator.data and self.row.get("curStatus") in (None, "ok")
+        return super().available and self.ident in self.coordinator.data and self.row.get("curStatus") in (None, "ok") and (self.field != "curVal" or not invalid_temperature(self.row))

@@ -3,6 +3,34 @@ from .const import BOOL_CONTROLS, ENUM_CONTROLS, NUMBER_CONTROLS
 from .zinc import MARKER, Number, Ref, value
 
 
+POINT_LABELS = {'operation': 'Betriebsanforderung',
+ 'errorCodeConnected': 'Fehlercode (Rohwert)',
+ 'errorStatus': 'Fehlerstatus',
+ 'heatModeEnergyConsumption': 'Heizen – Elektrische Leistung',
+ 'heatModeEnergyGeneration': 'Heizen – Thermische Leistung',
+ 'heatModeEnergyConsumptionTotalMsb': 'Heizen – Aufgenommene Energie',
+ 'heatModeEnergyGenerationTotalMsb': 'Heizen – Erzeugte Energie',
+ 'tankModeEnergyConsumption': 'Warmwasser – Elektrische Leistung',
+ 'tankModeEnergyGeneration': 'Warmwasser – Thermische Leistung',
+ 'tankModeEnergyConsumptionMsb': 'Warmwasser – Aufgenommene Energie',
+ 'tankModeEnergyGenerationMsb': 'Warmwasser – Erzeugte Energie',
+ 'coolModeHeatRecoveryModeEnergyConsumption': 'Kühlen/Wärmerückgewinnung – Elektrische Leistung',
+ 'coolModeHeatRecoveryModeEnergyGeneration': 'Kühlen/Wärmerückgewinnung – Thermische Leistung',
+ 'coolModeHeatRecoveryModeEnergyConsumptionTotalMsb': 'Kühlen/Wärmerückgewinnung – Aufgenommene Energie',
+ 'coolModeHeatRecoveryModeEnergyGenerationTotalMsb': 'Kühlen/Wärmerückgewinnung – Erzeugte Energie',
+ 'zone1WaterShiftRoomPoolSetpointTemperature': 'Zone 1 – Solltemperatur (Gerät)',
+ 'zone2WaterShiftRoomPoolSetpointTemperature': 'Zone 2 – Solltemperatur (Gerät)',
+ 'zone1Zone2OnOff': 'Zone 1/2 – Zustand (Gerät)',
+ 'tankWaterSetTemperature': 'Warmwasser – Solltemperatur (Gerät)',
+ 'heatCapacity1': 'Heizkapazität 1',
+ 'heatCapacity2': 'Heizkapazität 2',
+ 'coolCapacity1': 'Kühlkapazität 1',
+ 'coolCapacity2': 'Kühlkapazität 2',
+ 'quietRequest': 'Leisemodus (Gerät)',
+ 'direction': 'Betriebsrichtung',
+ 'mode': 'Betriebsart (Gerät)',
+ 'externalCompressorSw': 'Externer Kompressorschalter'}
+
 def model_key(row):
     for tag in ("bufferModelId", "tankModelId", "siteModelId", "heatPumpModelId", "heatPumpAquareaModelId"):
         model = row.get(tag)
@@ -14,6 +42,9 @@ def model_key(row):
 def name(row):
     ident = row.get("id")
     raw = row.get("dis") or (ident.display if isinstance(ident, Ref) else "") or row.get("navName") or "Cascade point"
+    key = model_key(row)
+    if key in POINT_LABELS:
+        raw = POINT_LABELS[key]
     # FIN display strings can contain empty hierarchy levels (leading pipes).
     return " – ".join(part.strip() for part in str(raw).split("|") if part.strip()) or "Cascade point"
 
@@ -62,6 +93,8 @@ def state(row):
     if row.get("curStatus") not in (None, "ok"):
         return None
     raw = row.get("curVal")
+    if invalid_temperature(row):
+        return None
     result = value(raw)
     return result if isinstance(result, (str, int, float, bool)) else None
 
@@ -90,12 +123,12 @@ def zone1_value(row, enabled):
 
 def is_dhw(row, field="curVal", rows=None):
     """Pure domestic hot water; a heating buffer tank is deliberately retained."""
-    if field == "isAvailableTank":
+    if field in ("isAvailableTank", "isRunningTank", "runRequestTank", "orderTank"):
         return True
     seen = set()
     while row:
         key = model_key(row).casefold()
-        if row.get("tankModelId") or key.startswith(("dhw", "bivalentdhw")) or "sterilization" in key:
+        if row.get("tankModelId") or key.startswith(("dhw", "bivalentdhw", "tankmode", "tankwater")) or "sterilization" in key:
             return True
         parent = row.get("equipRef")
         ident = parent.id if isinstance(parent, Ref) else None
@@ -109,5 +142,10 @@ def is_dhw(row, field="curVal", rows=None):
 def visible_data(rows, use_dhw=True):
     if use_dhw:
         return rows
-    return {ident: {key: val for key, val in row.items() if key != "isAvailableTank"}
+    return {ident: {key: val for key, val in row.items() if key not in ("isAvailableTank", "isRunningTank", "runRequestTank", "orderTank")}
             for ident, row in rows.items() if not is_dhw(row, rows=rows)}
+
+
+def invalid_temperature(row):
+    raw = row.get("curVal")
+    return isinstance(raw, Number) and unit(row) in ("°C", "°F") and raw.value == -32768
