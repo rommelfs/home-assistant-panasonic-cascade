@@ -59,14 +59,19 @@
     "step": {
       "init": {
         "title": "Polling and controls",
-        "description": "Controls change FIN default values. Schedules and manual overrides may take precedence. Writes have not been verified against real hardware. Disable domestic hot water to hide its sensors and controls. This does not change controller operation.",
+        "description": "Controls change FIN default values. Schedules and manual overrides may take precedence. Writes have not been verified against real hardware. Disable domestic hot water to hide its sensors and controls. This does not change controller operation. Alarm push checks active alarms about every 5 seconds. On iPhone, delivery uses the Companion App and Apple push. Then press the device button \"Alarm-Push testen\". If no phone appears, first connect the Companion App and allow notifications.",
         "data": {
           "scan_interval": "Polling interval (seconds)",
           "enable_controls": "Enable controls (experimental)",
           "verify_ssl": "Verify HTTPS certificate",
-          "use_dhw": "Use domestic hot water"
+          "use_dhw": "Use domestic hot water",
+          "alarm_notify_service": "Alarm push destination (iPhone: Apple Push / Companion App)",
+          "alarm_time_sensitive": "iPhone/iPad: time-sensitive alarm notifications"
         }
       }
+    },
+    "error": {
+      "notification_target_unavailable": "The selected phone is not available as a notification target. Connect the Companion App or disable alarm push."
     }
   }
 }

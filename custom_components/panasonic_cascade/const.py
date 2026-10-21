@@ -1,6 +1,6 @@
 """Integration constants."""
 DOMAIN = "panasonic_cascade"
-PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "select"]
+PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "select", "button"]
 DEFAULT_PROJECT = "pSmartEdge"
 # Only regular UI controls, never emergency overrides or sterilization triggers.
 BOOL_CONTROLS = {"sgReady", "stopRun"}

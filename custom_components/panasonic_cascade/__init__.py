@@ -6,6 +6,7 @@ from .const import PLATFORMS
 from .coordinator import CascadeCoordinator
 from .dashboard import async_register_dashboard_service
 from .visibility import async_apply_dhw_visibility
+from .notifications import AlarmMonitor
 
 
 async def async_setup_entry(hass, entry):
@@ -17,6 +18,11 @@ async def async_setup_entry(hass, entry):
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_register_dashboard_service(hass)
+    if entry.options.get("alarm_notify_service"):
+        monitor = AlarmMonitor(hass, entry, coordinator)
+        coordinator.alarm_monitor = monitor
+        await monitor.async_start()
+        entry.async_on_unload(monitor.async_stop)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 

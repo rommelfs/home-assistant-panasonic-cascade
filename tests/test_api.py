@@ -124,3 +124,13 @@ class ApiTest(unittest.IsolatedAsyncioTestCase):
                 await client(Session([Response(200,text)])).read_point('p:demo:r:zone', 'p:demo:r:site')
         with self.assertRaises(ValueError):
             await client(Session()).read_point('bad);deleteAll()', 'p:demo:r:site')
+
+    async def test_active_alarm_check_uses_site_scoped_read_only_endpoint(self):
+        s = Session([Response(200, 'ver:"3.0"\nempty\n')])
+        c = client(s)
+        self.assertEqual(await c.active_alarms('p:demo:r:site'), [])
+        expr = zinc.parse_grids(s.calls[0][1]['data'].decode())[0][0]['expr']
+        self.assertEqual(expr, 'panEval(`/alarmList/table/alarms`, {target:@p:demo:r:site})')
+        with self.assertRaises(ValueError):
+            await c.active_alarms('bad);deleteAll()')
+        self.assertEqual(len(s.calls), 1)

@@ -9,6 +9,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .api import ApiError, AuthError, CascadeClient, normalize_url
 from .const import DOMAIN
 from .model import name
+from .notifications import mobile_targets, TARGET
 from .zinc import reference
 
 
@@ -147,12 +148,25 @@ class CascadeConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class CascadeOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
+        errors = {}
         if user_input is not None:
-            return self.async_create_entry(title='', data={**self.config_entry.options, **user_input})
-        d = self.config_entry.options
+            target = user_input.get('alarm_notify_service', '')
+            if target and (not TARGET.fullmatch(target) or not self.hass.services.has_service('notify', target)):
+                errors['base'] = 'notification_target_unavailable'
+            else:
+                return self.async_create_entry(title='', data={**self.config_entry.options, **user_input})
+        d = {**self.config_entry.options, **(user_input or {})}
+        targets = [{'value':'', 'label':'Ausgeschaltet'}]
+        available = mobile_targets(self.hass)
+        current = d.get('alarm_notify_service', '')
+        if current and current not in available:
+            available[current] = current + ' (nicht verfügbar)'
+        targets.extend({'value':key, 'label':label} for key, label in available.items())
         return self.async_show_form(step_id='init', data_schema=vol.Schema({
             vol.Required('scan_interval', default=d.get('scan_interval', 30)): vol.All(vol.Coerce(int), vol.Range(min=15, max=300)),
             vol.Required('enable_controls', default=d.get('enable_controls', False)): bool,
             vol.Required('use_dhw', default=d.get('use_dhw', True)): bool,
+            vol.Required('alarm_notify_service', default=d.get('alarm_notify_service', '')): selector.SelectSelector(selector.SelectSelectorConfig(options=targets)),
+            vol.Required('alarm_time_sensitive', default=d.get('alarm_time_sensitive', True)): bool,
             vol.Required('verify_ssl', default=d.get('verify_ssl', self.config_entry.data.get('verify_ssl', True))): bool,
-        }))
+        }), errors=errors)

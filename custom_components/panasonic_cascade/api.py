@@ -196,6 +196,11 @@ class CascadeClient:
         # Matches parseFilter(...).readAll() in the captured application.
         return await self.eval(f"parseFilter({quote(filter_text)}).readAll()")
 
+    async def active_alarms(self, site_id):
+        if not REFERENCE.fullmatch(site_id):
+            raise ValueError("Invalid site reference")
+        return await self.eval(f'panEval(`/alarmList/table/alarms`, {{target:@{site_id}}})')
+
     async def read_point(self, ident, site_id):
         if not REFERENCE.fullmatch(ident) or not REFERENCE.fullmatch(site_id):
             raise ValueError("Invalid point reference")

@@ -59,14 +59,19 @@
     "step": {
       "init": {
         "title": "Abfrage und Steuerung",
-        "description": "Steuerungen setzen FIN-Standardwerte. Zeitprogramme und manuelle Übersteuerungen können Vorrang haben. Schreibfunktionen wurden noch nicht an einer realen Anlage getestet. Bei ausgeschalteter Warmwasseraufbereitung werden reine Warmwasserwerte und Steuerungen ausgeblendet. Die Anlage selbst wird dadurch nicht umgestellt.",
+        "description": "Steuerungen setzen FIN-Standardwerte. Zeitprogramme und manuelle Übersteuerungen können Vorrang haben. Schreibfunktionen wurden noch nicht an einer realen Anlage getestet. Bei ausgeschalteter Warmwasseraufbereitung werden reine Warmwasserwerte und Steuerungen ausgeblendet. Die Anlage selbst wird dadurch nicht umgestellt. Alarm-Push prüft aktive Alarme etwa alle 5 Sekunden. Auf dem iPhone erfolgt die Zustellung über die Companion App und Apples Pushdienst. Anschließend unter dem Gerät „Alarm-Push testen“ drücken. Falls kein Handy erscheint, zuerst die Companion App verbinden und Mitteilungen erlauben.",
         "data": {
           "scan_interval": "Abfrageintervall (Sekunden)",
           "enable_controls": "Steuerungen aktivieren (experimentell)",
           "verify_ssl": "HTTPS-Zertifikat prüfen",
-          "use_dhw": "Warmwasseraufbereitung verwenden"
+          "use_dhw": "Warmwasseraufbereitung verwenden",
+          "alarm_notify_service": "Alarm-Push aufs Handy (iPhone: Apple Push / Companion App)",
+          "alarm_time_sensitive": "iPhone/iPad: zeitkritische Alarm-Pushs"
         }
       }
+    },
+    "error": {
+      "notification_target_unavailable": "Das ausgewählte Handy ist nicht als Benachrichtigungsziel verfügbar. Companion App verbinden oder Alarm-Push ausschalten."
     }
   }
 }
