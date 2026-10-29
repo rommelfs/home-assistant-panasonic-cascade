@@ -1,48 +1,162 @@
-# Panasonic Cascade / Smart Edge für Home Assistant
+# Panasonic Cascade / Smart Edge for Home Assistant
 
-Experimentelle Custom Integration für die lokale FIN-/Haystack-Schnittstelle der Panasonic Cascade Control Oberfläche (`panCascadeControlExt`). Version 0.5.0 ergänzt Alarm-Pushs auf ein ausgewähltes Handy, einschließlich iPhone über die iOS-Companion-App und Apple Push. Seit 0.4.0 gibt es zusätzliche Geräte- und Energiedetails sowie eine Alarmansicht anhand neuer HAR-Aufzeichnungen. Seit 0.3.1 ist die Warmwasseransicht abschaltbar. Seit 0.3.0 gibt es bereinigte Anzeigenamen, einen eigenen Zone-1-Schalter und einen Dashboard-Assistenten. Anmeldung mit Benutzername/Passwort und Projektauswahl sind seit 0.2.0 enthalten. Schreibzugriffe sind noch nicht an einer realen Anlage geprüft.
+Experimental custom integration for the local FIN/Haystack API used by the Panasonic Cascade Control web interface (`panCascadeControlExt`).
 
-Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade).
+The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.5.1** provides English documentation; application behavior is unchanged from 0.5.0. Hardware writes have not yet been verified on a real installation.
 
-## Installation zum lokalen Testen
+Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
-1. Den Ordner `custom_components/panasonic_cascade` aus diesem Paket nach `/config/custom_components/panasonic_cascade` auf dem Home-Assistant-System kopieren.
-2. Home Assistant neu starten.
-3. **Einstellungen → Geräte & Dienste → Integration hinzufügen → Panasonic Cascade / Smart Edge** öffnen.
-4. HTTPS-Adresse des Controllers, **Benutzername und Passwort** eingeben. Eine vollständige URL zur Anlagenübersicht wird ebenfalls akzeptiert. Für Konten ohne Passwort darf das Passwortfeld leer bleiben.
-5. Bei einem selbstsignierten Zertifikat kann **HTTPS-Zertifikat prüfen** ausgeschaltet werden. Die Verbindung bleibt verschlüsselt, aber die Serveridentität wird dann nicht geprüft. Es ist kein individueller Fingerprint fest eingebaut.
-6. Ein Projekt aus der automatisch geladenen **Projektauswahl** auswählen, anschließend die Anlage in diesem Projekt auswählen.
-7. Für weitere Projekte die Integration erneut hinzufügen. Einträge und Entitäten verschiedener Projekte sind voneinander getrennt; dieselbe Anlage wird nicht doppelt eingerichtet.
+## Installation
 
-Die Anmeldung folgt dem vom Server angebotenen FIN-Verfahren (SCRAM, älteres HMAC oder vom Server angefordertes Plaintext über HTTPS). Cookies und `SkyArc-Attest-Key` werden automatisch bezogen und nur im Arbeitsspeicher gehalten. Nach einer ausdrücklich abgelaufenen Sitzung erfolgt genau eine erneute Anmeldung und Wiederholung der Anfrage. Falsche Zugangsdaten oder fehlende Rechte lösen eine Aufforderung zur erneuten Anmeldung aus. Passwortberechnungen blockieren nicht die Home-Assistant-Ereignisschleife.
+### HACS
 
-Der Home-Assistant-Rechner muss die Controller-Adresse selbst erreichen können. Die Beispieladresse `172.17.0.1` ist nicht auf jedem Rechner dieselbe Anlage und muss gegebenenfalls durch die LAN-Adresse ersetzt werden.
+1. In HACS, open **Custom repositories**.
+2. Add `https://github.com/rommelfs/home-assistant-panasonic-cascade` with category **Integration**.
+3. Download the integration. Enable prereleases in HACS if the desired version is not listed.
+4. Restart Home Assistant.
 
-## Vorhandene Einträge aus Version 0.1.0
+Inclusion in the default HACS catalog and hardware compatibility have not been confirmed.
 
-Bestehende cookiebasierte Einträge bleiben nutzbar. Zur Umstellung auf Benutzername/Passwort im Menü des vorhandenen Integrationseintrags **Neu konfigurieren** wählen. Nach Ablauf einer Sitzung ist auch **Erneut authentifizieren** möglich. Projekt, Anlage und Entitäts-IDs bleiben dabei erhalten. Alternativ kann ein Eintrag neu eingerichtet werden; ein noch vorhandener Eintrag für dieselbe Anlage muss dann zuvor entfernt werden.
+### Manual installation
 
-Benutzername und Passwort werden in der Home-Assistant-Konfiguration gespeichert. Die automatisch ausgestellten Sitzungscookies und Attestierungsschlüssel werden nicht in die Konfiguration geschrieben. Zugangsdaten und Home-Assistant-Backups entsprechend schützen und nicht in GitHub oder diesen Chat kopieren.
+1. Copy `custom_components/panasonic_cascade` from this package to `/config/custom_components/panasonic_cascade` on the Home Assistant system.
+2. Restart Home Assistant.
 
-## Alarm-Push auf iPhone / Handy (0.5.0)
+### Connect the controller
 
-1. In HACS auf **0.5.0** aktualisieren und Home Assistant neu starten.
-2. Die **Home-Assistant-Companion-App** auf dem iPhone mit demselben Home Assistant verbinden und **Mitteilungen erlauben**. Das iPhone erscheint dadurch als Benachrichtigungsziel in Home Assistant. Für iOS-Cloud-Push nutzt die App die Push-Infrastruktur einschließlich Apple APNs; ist lokaler Push verfügbar, kann Home Assistant diesen Zustellweg bevorzugen.
-3. **Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren** öffnen. Unter **Alarm-Push aufs Handy** das eigene iPhone auswählen und speichern. Die Auswahl **Ausgeschaltet** deaktiviert Pushs und die zusätzliche schnelle Alarmprüfung. Bestehende Einträge starten mit ausgeschalteten Pushs.
-4. Optional **iPhone/iPad: zeitkritische Alarm-Pushs** einschalten. Diese Option setzt `interruption-level: time-sensitive`; die entsprechende Berechtigung muss auf dem iPhone für Home Assistant erlaubt sein. Ohne diese Option wird eine normale iOS-Mitteilung gesendet. Die Integration fordert keinen kritischen Alarm mit erzwungenem Ton an.
-5. Auf der Geräteseite der Integration unter Diagnose **Alarm-Push testen** drücken und prüfen, ob die Testnachricht auf dem iPhone ankommt. Dieser Knopf meldet ausdrücklich einen Test und erzeugt keinen echten Anlagenalarm. Er ist nur bei gewähltem Benachrichtigungsziel vorhanden.
+1. Open **Settings → Devices & services → Add integration → Panasonic Cascade / Smart Edge**.
+2. Enter the controller's **HTTPS address, username, and password**. A full URL to the plant overview is also accepted. The password may be empty for accounts configured without a password.
+3. For a self-signed certificate, you can turn off **Verify HTTPS certificate**. Transport remains encrypted, but the server's identity is then not verified. No installation-specific certificate fingerprint is embedded in the integration.
+4. Select a project from the discovered project list, then select the installation within that project.
+5. Add another integration entry to connect another project. Projects have separate entries and entities; the same installation cannot be configured twice.
 
-Bei aktiviertem Alarm-Push prüft eine separate, lesende Abfrage die aktiven Alarme **etwa alle fünf Sekunden**. Eine neue Meldung wird an das gewählte Handy übergeben, sobald sie dabei erkannt wird; hinzu kommen Reglerantwort- und Push-Laufzeit. Bei Verbindungsfehlern erfolgen Wiederholungen mit Wartezeit. Das normale Messwert-Abfrageintervall bleibt unverändert. Sehr kurze Alarme zwischen zwei Abfragen können bei dieser Abfrageweise unentdeckt bleiben.
+Home Assistant must be able to reach the controller directly. The example address `172.17.0.1` does not identify the same controller on every computer; replace it with the appropriate LAN address when necessary.
 
-Ein aktiver Alarm wird einmal pro erkanntem Auftreten gemeldet. Der Merker wird lokal gespeichert, damit gewöhnliche Neustarts nicht denselben weiterhin aktiven Alarm erneut melden. Ein neues Auftreten mit neuer Alarmzeit sowie ein Alarm nach einem erkannten Normalzustand werden wieder benachrichtigt. Bereits aktive, noch nicht gemeldete Alarme werden auch beim Aktivieren der Funktion gemeldet. Wird ein anderes Handy ausgewählt, erhält es noch aktive Alarme ebenfalls einmal. Historische/auf Normal zurückgekehrte Meldungen und reine Warmwasseralarme bei abgeschalteter Warmwasseroption werden nicht gepusht. Bei unbekannter Zuordnung bleibt ein aktiver Alarm sichtbar und wird nicht vorsorglich ausgefiltert.
+Home Assistant UI labels depend on the selected language. The steps in this guide describe the controls in English; existing generated entity and dashboard names may use another language.
 
-Wenn Home Assistant beim Aufruf des Benachrichtigungsziels einen Fehler zurückgibt, bleibt der Alarm für eine erneute Übergabe vorgemerkt. Eine erfolgreich ausgeführte Aktion bestätigt nur die Übergabe an die Companion-App-Benachrichtigung, nicht die tatsächliche Anzeige auf dem Handy. Einige Fehler der nachgelagerten Push-Infrastruktur werden nur durch die Mobile-App-Integration protokolliert. Die tatsächliche Zustellung hängt von Internetverbindung und Mitteilungsberechtigungen ab; deshalb den Test auf dem echten Handy prüfen.
+## Authentication and existing installations
 
-Quellen: [Companion-App-Benachrichtigungen](https://companion.home-assistant.io/docs/notifications/notifications-basic/), [Mobile-App-Push-Anbindung](https://contributors.home-assistant.io/companion/mobile-app-api/notifications/).
+Authentication follows the mechanism offered by FIN: SCRAM, legacy HMAC, or server-requested plaintext credentials over HTTPS. Session cookies and `SkyArc-Attest-Key` are retrieved automatically and held only in memory. Explicit session expiry triggers one bounded reauthentication attempt and request retry. Invalid credentials or access-denied responses can prompt reauthentication. Password derivation does not block Home Assistant's event loop.
 
-## Neue Geräte-, Energie- und Alarmdaten (0.4.0)
+Existing cookie-based entries from 0.1.0 remain supported. Select **Reconfigure** from the existing integration entry's menu to switch to username/password authentication. **Reauthenticate** is also available after session expiry. The project, installation, and entity IDs are retained. If you replace an entry instead, remove the existing entry for the same installation before setting it up again.
 
-Nach dem HACS-Update Home Assistant neu starten. Vorhandene Entitätskennungen bleiben erhalten. Neue Punkte werden beim Laden erkannt. Für die zusätzlichen Dashboard-Ansichten **Energie** und **Alarme** das Cascade-Dashboard erneut befüllen:
+The username and password are stored in Home Assistant's configuration. Automatically issued session cookies and attestation keys are not persisted in that configuration. Protect credentials and Home Assistant backups; do not publish them in GitHub or paste them into chat.
+
+## Updating
+
+Download the desired version in HACS and restart Home Assistant. Entity and device unique IDs are retained. Existing entity IDs and user-assigned names are preserved. Reloading the integration discovers new points when the plant structure changes.
+
+After an update that adds dashboard content, regenerate the Cascade dashboard as described below. This replaces any custom cards in the selected dashboard, so use a separate dashboard for personal layouts you want to retain.
+
+## Alarm notifications on iPhone and other phones
+
+Available since 0.5.0.
+
+1. Connect the **Home Assistant Companion App** on the phone to the same Home Assistant instance and allow notifications. This creates a phone notification target in Home Assistant.
+2. Open **Settings → Devices & services → Panasonic Cascade / Smart Edge → Configure**.
+3. Select your phone in the alarm push destination option and save. Selecting the disabled/empty destination turns off notifications and the additional fast alarm checks. Notifications are disabled by default for existing entries.
+4. Optionally enable **iPhone/iPad: time-sensitive alarm notifications**. This sets `interruption-level: time-sensitive`; allow time-sensitive notifications for Home Assistant in iOS settings. With this option disabled, iOS receives a normal notification. The integration does not request a critical alert with forced sound.
+5. On the integration's device page, press the diagnostic **alarm push test button** and confirm receipt on the phone. The message explicitly identifies itself as a test and does not create a controller alarm. The button is available only when a notification destination is selected.
+
+For iPhone cloud notifications, the Companion App uses push infrastructure including Apple APNs. Home Assistant may prefer local push when it is available.
+
+When enabled, a separate read-only request checks active alarms **approximately every five seconds**. A new alarm is handed to the selected notification target when detected; controller response and push delivery time are additional. Connection failures cause retries with a delay. The normal measurement polling interval is unchanged. Alarms shorter than the interval between checks can be missed.
+
+Each detected active alarm episode is notified once. A local marker prevents ordinary restarts from sending the same still-active alarm again. A new alarm timestamp, or a recurrence after an observed normal state, produces another notification. Enabling notifications also reports already-active alarms that have not been sent. Selecting a different phone reports still-active alarms to that phone once.
+
+Historical and returned-to-normal alarms are not pushed. When domestic hot water is disabled, alarms identified as exclusively related to domestic hot water are excluded. An active alarm with an unknown equipment association is retained rather than silently filtered out.
+
+If the Home Assistant notification action raises an error, the alarm remains pending for retry. A successful action confirms handoff to the notification integration, not display on the phone. Some downstream failures are logged only by the Mobile App integration. Actual delivery depends on connectivity and notification permissions; verify it using the test button on your real phone.
+
+References: [Companion App notifications](https://companion.home-assistant.io/docs/notifications/notifications-basic/), [Mobile App push integration](https://contributors.home-assistant.io/companion/mobile-app-api/notifications/).
+
+## Sensors, energy, and equipment diagnostics
+
+The integration discovers installation, equipment, and point references from the controller. Installation IDs and heat pump counts are not hardcoded.
+
+- **Sensors:** numeric and text values from `curVal`, with units from point metadata, plus equipment mode and cascade counters.
+- **Binary sensors:** Boolean points and equipment connection, operation, alarm, and availability states.
+- **Power:** generated thermal power and consumed electrical power. The FIN overview endpoints are named `totalGeneratedEnergy` and `totalConsumedEnergy`, but the captures return **kW**. The actual unit is retained; these values are not converted into kWh meters.
+- **Per-unit detail values:** electrical and thermal power from the detail view, minimum/maximum working hours, the error code displayed by the controller, operating requests, fault states, capacities, and setpoints. Existing COP, pressure, and temperature points remain available.
+- **Energy counters:** the newer captures include real kWh counters for heating, domestic hot water, and cooling/heat recovery. Only energy points explicitly marked `hisTotalized` receive the `total_increasing` state class. W/kW readings remain power. Eligible counters can be used in Home Assistant energy reporting. Daily statistics accumulate after Home Assistant starts recording them; earlier controller energy history is not imported. Raw power readings and the controller's calculated detail-view power can differ; the integration does not combine them into a new total.
+- **Read-only diagnostics:** configured zones, maximum setpoints, sensor/control types, tank connections, rated capacity, and model codes. Equipment and plant records also expose available model names, PID/cascade settings, staging delays, and setpoint offsets. Values without a confirmed code-to-label mapping remain identified as codes. These additions do not create new commissioning controls.
+
+Measurements are normally updated every **30 seconds**, configurable from **15–300 seconds**. Optional current detail values share one `evalAll` request per polling cycle. Equipment parameters and alarm history are refreshed within that request only every **five minutes**. Unsupported or unauthorized optional requests do not stop normal point polling. No server-side watch sessions are created.
+
+A point with a status other than `ok` is unavailable. `NA`, `NaN`, and infinite numbers are not exposed as measurements. A temperature value of **−32768** is treated as unavailable. Other readings are retained unchanged: for example, the captured buffer temperature of **−78 °C** comes from the controller and requires investigation at the installation.
+
+## Alarms and history
+
+Available since 0.4.0:
+
+- Current alarm count.
+- Number of alarm records in the past year.
+- Most recent alarm.
+- Up to **20 displayed records** in attributes and the dashboard, including time, equipment, text, and status.
+
+Historical alarms that have returned to normal are not reported as currently active. A numeric raw error code alone is not interpreted as an active alarm. Alarm acknowledgement and deletion actions are not provided. With domestic hot water disabled, exclusively domestic-hot-water alarms are filtered when their target can be identified from installation metadata.
+
+A failed alarm request is reported as unavailable rather than as zero alarms. Weather forecasts, raw historical curves, and full controller histories are not backfilled into Home Assistant's Recorder.
+
+## Hide domestic hot water
+
+Available since 0.3.1; applies independently to each installation.
+
+Open **Settings → Devices & services → Panasonic Cascade / Smart Edge → Configure**, turn off **Use domestic hot water**, and save. The integration reloads automatically. This option defaults to enabled so existing installations retain their data.
+
+The option hides exclusively domestic-hot-water tank values and controls, sterilization/legionella functions, domestic-hot-water COP, availability/operation status, and newly discovered unit-level domestic-hot-water power, energy, and setpoint readings. Heating COP, the heating buffer and its temperature difference, shared heat pump values, SG Ready, and zone controls remain available. This changes Home Assistant visibility only; it does not send a switching command or change the controller configuration.
+
+Existing domestic-hot-water entities are disabled and hidden internally to preserve their IDs and user-assigned names. They remain discoverable as disabled entries in Home Assistant's full entity registry. New domestic-hot-water entities are not created while the option is disabled.
+
+Existing native dashboard cards are cleaned of matching entity references; cards containing only domestic-hot-water entities are removed. Re-enabling the option restores previously hidden entities and dashboards that have remained unchanged. Entities disabled by the user remain disabled. If a dashboard is edited or regenerated in the meantime, it is not overwritten on re-enabling; regenerate the Cascade dashboard if required. YAML dashboards and custom cards with their own data formats may need manual adjustment.
+
+## Optional controls and Zone 1 switching
+
+Open **Configure**, enable the experimental controls option, and save. Controls are disabled by default. Eight supported point models were identified in the captures:
+
+| Control | FIN model |
+| --- | --- |
+| Enable SG Ready | `sgReady` |
+| Disable domestic hot water | `stopRun` (`true` means disabled) |
+| Quiet mode | `quietModeRequest` |
+| Buffer operating mode | `bufferMode` |
+| Zone 1/2 on/off selection | `zone1Zone2OnOffSetpoint` |
+| Zone 1 heating water setpoint | `zone1WaterTemperatureHotSetpoint` |
+| Zone 1 cooling water setpoint | `zone1WaterTemperatureColdSetpoint` |
+| Domestic-hot-water setpoint | `tankWaterTempSpBeforeSgReady` |
+
+Controls use only the **`pointSetDef` / Set Default** action advertised in point metadata. General switches, selectors, and temperature controls display `writeDef`, the default being edited. Separate point sensors display `curVal`, the currently effective value. Schedules and manual overrides can make these values differ. The integration does not create manual or emergency overrides.
+
+Temperature limits are conservative: **20–55 °C** for heating, **5–25 °C** for cooling, and **40–60 °C** for domestic hot water. Tighter controller limits take precedence. Numeric setpoints are sent with their °C unit. Sterilization triggers, emergency actions, and arbitrary FIN expressions are not exposed as controls. Actual control availability also depends on server metadata and write permissions.
+
+### Dedicated Zone 1 switch
+
+Available since 0.3.0 when controls are enabled and the controller advertises the shared Zone 1/2 point as writable. The switch displays the currently effective state of Zone 1.
+
+Before switching, the integration rereads the shared value from the selected installation. It changes only the first component, for example `On/On` to `Off/On`, retaining Zone 2 from that fresh read. Integration writes are serialized. Unknown states or effective values that differ from the default prevent the write; check for a schedule or override in the controller interface first.
+
+This switch also uses `pointSetDef`. The protocol cannot atomically exclude a simultaneous change by another operator between the read and write.
+
+## Dashboard
+
+1. Open **Settings → Dashboards → Add dashboard** and create an **empty dashboard**. For example, use title **Panasonic Cascade**, URL path **panasonic-cascade**, and show it in the sidebar.
+2. Open **Developer tools → Actions** and select `panasonic_cascade.populate_dashboard`.
+3. Enter `panasonic-cascade` as the dashboard URL path, without slashes. This is the URL path, not the title. Optionally select a single integration entry when multiple installations are configured.
+4. Run the action and open the dashboard from the sidebar.
+
+Equivalent YAML:
+
+```yaml
+action: panasonic_cascade.populate_dashboard
+data:
+  url_path: panasonic-cascade
+```
+
+The generated dashboard provides an overview of controls, setpoints, power, temperatures, operating states, and histories; a device-grouped view of all values; and energy/alarm views when the corresponding entities are available. Histories and statistics fill as Home Assistant records data. Earlier controller history is not imported.
+
+The helper uses actual registered entity IDs, including renamed IDs and numeric suffixes. It requires administrator access and an existing storage-mode dashboard. It does not overwrite an existing configuration unless replacement is explicitly enabled.
+
+To regenerate a dashboard after enabling controls, discovering new equipment, or updating the integration, use:
 
 ```yaml
 action: panasonic_cascade.populate_dashboard
@@ -51,106 +165,50 @@ data:
   overwrite: true
 ```
 
-Dabei werden individuelle Karten dieses Dashboards ersetzt. Andere Dashboards bleiben bestehen. Die ausgeschaltete Warmwasseroption wird auch für die neuen Gerätedaten berücksichtigt.
+This replaces custom cards in **that dashboard**. Other dashboards are retained. If Home Assistant has already initialized a new dashboard and the action reports that it contains a configuration, use `overwrite: true` for that intended target. The domestic-hot-water visibility option also applies to generated content.
 
-- **Je Wärmepumpe:** aufgenommene elektrische und erzeugte thermische Leistung aus der Detailansicht, minimale/maximale Betriebsstunden, Fehlercode der Regleranzeige sowie zusätzliche vom Regler gelieferte Punkte wie Betriebsanforderung, Fehlerstatus, Leistungsanteile und Solltemperaturen. Bereits vorhandene COP-, Druck- und Temperaturpunkte bleiben bestehen.
-- **Energiezähler:** Die neuen Daten enthalten echte kWh-Zähler für Heizen, Warmwasser und Kühlen/Wärmerückgewinnung. Nur Energiepunkte mit ausdrücklicher `hisTotalized`-Kennzeichnung erhalten `total_increasing`; kW/W bleiben Leistung. Diese Zähler sind dadurch für passende Home-Assistant-Energieauswertungen verwendbar. Tagesstatistiken entstehen erst durch Home Assistants Aufzeichnung nach dem Update. Es wird keine frühere Energiehistorie importiert. Die vom Regler gelieferte Rohleistung und die berechnete Leistung der Detailansicht können abweichen; die Integration führt diese Anzeigen nicht zu einer neuen Summe zusammen.
-- **Geräteparameter:** konfigurierte Zonen, maximale Solltemperaturen, Sensortypen/Regelungstypen, Speicheranschlüsse, Nennleistung und Modellcodes werden zusätzlich als Diagnosewerte gelesen. Vorhandene Modellbezeichnungen, PID- und Kaskadenparameter, Zuschalt-/Abschaltverzögerungen sowie Sollwertverschiebungen werden aus den Geräte- und Anlagendatensätzen angezeigt. Codes ohne bestätigte Zuordnung werden als Codes bezeichnet. Diese neuen Konfigurationsdaten sind ausschließlich lesbar; daraus entstehen keine zusätzlichen Schalt- oder Inbetriebnahmeaktionen.
-- **Alarme:** Anzahl aktueller Alarme, Anzahl der Alarmdatensätze im letzten Jahr und letzter Alarm. Attribute und Dashboard zeigen maximal 20 Einträge mit Zeit, Gerät, Text und Status. Historische, bereits normale Alarme werden nicht als aktuell aktive Alarme ausgegeben. Ein numerischer Rohfehlercode allein wird ebenfalls nicht als aktiver Alarm interpretiert. Es gibt keine Quittierungs- oder Löschaktionen. Reine Warmwasseralarme werden bei abgeschalteter Warmwasseransicht ausgefiltert, soweit ihr Zielgerät über die Anlagenmetadaten zugeordnet werden kann.
-- **Messqualität:** Der vom Regler als Temperatur gelieferte Wert `−32768` wird als fehlender Messwert behandelt. Andere Werte wie die aufgezeichneten `−78 °C` bleiben unverändert und müssen an der Anlage geprüft werden.
+## Repository and development
 
-Die optionalen aktuellen Detailwerte werden zusammen in einer `evalAll`-Anfrage pro Abfrageintervall gelesen. Geräteparameter und Alarmverlauf werden innerhalb dieser Anfrage nur alle fünf Minuten neu abgefragt. Nicht unterstützte oder nicht berechtigte optionale Abfragen lassen die normalen Punktabfragen weiterlaufen. Eine fehlgeschlagene Alarmabfrage erscheint als nicht verfügbar und wird nicht als „keine Alarme“ ausgegeben. Wetterprognosen, Rohkurven und vollständige Controller-Historien werden nicht in Home Assistants Recorder nachgetragen.
-
-## Warmwasseraufbereitung ausblenden (ab 0.3.1)
-
-In HACS auf **0.5.0** aktualisieren und Home Assistant neu starten. Unter **Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren** die Option **Warmwasseraufbereitung verwenden** abwählen und speichern. Die Integration lädt sich automatisch neu. Die Einstellung gilt pro Installation und ist zunächst eingeschaltet, damit bestehende Installationen ihre Werte behalten.
-
-Ausgeblendet werden reine Trinkwarmwasser-Speicherwerte und Bedienelemente, Sterilisation/Legionellenfunktionen, Warmwasser-COP sowie der reine Warmwasser-Verfügbarkeitsstatus. Heizungs-COP, Pufferspeicher einschließlich seiner Temperaturdifferenz, gemeinsame Wärmepumpenwerte, SG Ready und Zonensteuerung bleiben erhalten. Die Option ist eine Home-Assistant-Anzeigeeinstellung; sie sendet keinen Schaltbefehl und ändert keine Anlagenkonfiguration.
-
-Bereits vorhandene Warmwasserentitäten werden intern deaktiviert und ausgeblendet, damit ihre Kennungen und selbst vergebenen Namen erhalten bleiben. In Home Assistants vollständiger Entitätsverwaltung bleiben sie als deaktivierte Einträge auffindbar. Neue Warmwasserentitäten werden bei abgeschalteter Option nicht angelegt. Die normalen Dashboard- und Steuerungsansichten enthalten sie nicht mehr.
-
-Vorhandene native Dashboard-Karten werden von den passenden Warmwasserreferenzen bereinigt; reine Warmwasserkarten verschwinden. Beim erneuten Einschalten werden zuvor ausgeblendete Entitäten und unverändert gebliebene Dashboards wiederhergestellt. Selbst deaktivierte Entitäten bleiben deaktiviert. Wird ein Dashboard zwischenzeitlich bearbeitet oder neu befüllt, wird es beim Einschalten nicht überschrieben; dann kann das Cascade-Dashboard bei Bedarf erneut über `panasonic_cascade.populate_dashboard` befüllt werden. YAML-Dashboards und individuelle Karten mit eigenen Datenformaten müssen gegebenenfalls manuell angepasst werden.
-
-## Aktualisierung ab 0.3.0: Namen, Zone 1 und Dashboard
-
-In HACS Version **0.5.0** herunterladen (gegebenenfalls Vorabversionen anzeigen) und Home Assistant neu starten. Anzeigenamen enthalten jetzt keine senkrechten Striche mehr. Die eindeutigen Entitäts- und Gerätekennungen bleiben erhalten; bereits verwendete Entitäts-IDs und selbst vergebene Namen ändern sich nicht.
-
-### Zone 1 schalten
-
-Unter **Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren** die Option **Steuerungen aktivieren** einschalten und speichern. Danach erscheint **Zone 1 – Ein/Aus**, sofern der Regler den gemeinsamen Zone-1/2-Punkt als beschreibbar bereitstellt. Der Schalter zeigt den aktuellen wirksamen Zustand von Zone 1.
-
-Vor jedem Schalten liest die Integration den gemeinsamen Wert erneut aus der gewählten Anlage. Sie verändert nur den ersten Teil von beispielsweise `On/On` zu `Off/On`; Zone 2 wird aus dieser aktuellen Abfrage übernommen. Eigene Schreibvorgänge werden nacheinander ausgeführt. Wenn die aktuellen Werte unbekannt sind oder vom Standardwert abweichen, wird kein Schreibbefehl gesendet. Dann zunächst ein Zeitprogramm oder eine Übersteuerung in der Regleroberfläche prüfen. Der Schalter verwendet wie die anderen Bedienelemente `pointSetDef`. Eine zeitgleiche Änderung durch einen anderen Bediener zwischen Lesen und Schreiben kann das Protokoll nicht atomar ausschließen.
-
-### Dashboard mit aktuellen Werten
-
-1. **Einstellungen → Dashboards → Dashboard hinzufügen** öffnen und ein **leeres Dashboard** anlegen. Als Titel beispielsweise **Panasonic Cascade** und als URL **panasonic-cascade** wählen. In der Seitenleiste anzeigen lassen.
-2. **Entwicklerwerkzeuge → Aktionen** öffnen und **Panasonic Cascade: Cascade-Dashboard befüllen** auswählen (Aktion `panasonic_cascade.populate_dashboard`).
-3. Als **Dashboard-Adresse** `panasonic-cascade` eingeben und die Aktion ausführen. Das ist der URL-Pfad ohne Schrägstriche, nicht der Titel. Bei mehreren Installationen kann optional ein einzelner Integrationseintrag ausgewählt werden.
-4. Das neue Dashboard in der Seitenleiste öffnen. Es enthält **Übersicht** mit Schaltern, Sollwerten, Leistung, aktuellen Temperaturen und Betriebszuständen sowie **Alle Werte**, nach Gerät gruppiert. Verläufe füllen sich mit den von Home Assistant aufgezeichneten Messwerten; es wird keine frühere Controller-Historie importiert.
-
-Alternativ die Aktion in der YAML-Ansicht ausführen:
-
-```yaml
-action: panasonic_cascade.populate_dashboard
-data:
-  url_path: panasonic-cascade
-```
-
-Es werden die tatsächlichen Entitäts-IDs aus Home Assistant verwendet, auch wenn sie umbenannt wurden oder einen Zahlensuffix tragen. Die Aktion benötigt Administratorrechte und befüllt nur ein bereits vorhandenes Dashboard. Vorhandene Karten werden ohne ausdrücklich aktivierte Option **Vorhandene Dashboard-Konfiguration ersetzen** nicht ersetzt. Wurden Steuerungen erst später aktiviert oder neue Geräte erkannt, dieselbe Aktion erneut mit dieser Option ausführen. Individuelle Änderungen an diesem Dashboard werden dabei ersetzt; andere Dashboards bleiben erhalten.
-
-## Daten und Bedienelemente
-
-Die Integration erkennt Anlagen-, Geräte- und Punktreferenzen vom Server. Es gibt keine fest eingebauten Anlagen-IDs oder Wärmepumpenanzahlen.
-
-- Sensoren: Zahlen und Texte aus `curVal`, Einheit aus den Punktmetadaten; zusätzlich Betriebsart und Kaskaden-Zähler.
-- Binärsensoren: Boolesche Datenpunkte sowie Verbindung, Betrieb, Alarm und Verfügbarkeit der Geräte.
-- Leistungsanzeigen: erzeugte thermische und aufgenommene elektrische Leistung. Die FIN-Abrufe heißen `totalGeneratedEnergy` und `totalConsumedEnergy`, liefern in der Aufzeichnung aber **kW**. Die tatsächliche Einheit wird übernommen; es wird kein kWh-Zähler daraus errechnet.
-- Aktualisierung: alle 30 Sekunden; in den Optionen auf 15–300 Sekunden einstellbar. Die Daten werden über `eval` gelesen, ohne serverseitige Watch-Sitzungen anzulegen.
-- Ein nicht als `ok` gemeldeter Punkt ist nicht verfügbar. Auch `NA`, `NaN` und unendliche Zahlen werden nicht als Messwerte ausgegeben. Andere Werte werden unverändert übernommen: So stammt die aufgezeichnete Puffertemperatur von **−78 °C** vom Controller selbst und muss an der Anlage geprüft werden.
-
-Unter **Konfigurieren** lassen sich experimentelle Steuerungen aktivieren. Die Auswertung der Aufzeichnungen hat acht passende Punkte ergeben:
-
-| Bedienelement | FIN-Modell |
-| --- | --- |
-| SG Ready aktivieren | `sgReady` |
-| Warmwasser deaktivieren | `stopRun` (wahr bedeutet deaktiviert) |
-| Leisemodus | `quietModeRequest` |
-| Puffer-Betriebsart | `bufferMode` |
-| Zone 1/2 ein/aus | `zone1Zone2OnOffSetpoint` |
-| Zone 1 Heiz-Solltemperatur | `zone1WaterTemperatureHotSetpoint` |
-| Zone 1 Kühl-Solltemperatur | `zone1WaterTemperatureColdSetpoint` |
-| Warmwasser-Solltemperatur | `tankWaterTempSpBeforeSgReady` |
-
-Die Steuerungen verwenden ausschließlich die in den Punktmetadaten beworbene Aktion **`pointSetDef` / Set Default**. Die allgemeinen Schalter, Auswahl- und Temperaturfelder zeigen `writeDef`, also den zu bearbeitenden Standardwert. Der neue Zone-1-Schalter zeigt hingegen den wirksamen Zustand aus `curVal`. Der separate Sensor zeigt `curVal`, also den wirksamen aktuellen Wert. Zeitprogramme und manuelle Übersteuerungen können dafür sorgen, dass diese beiden Werte voneinander abweichen. Die Integration erzeugt keine manuellen oder Notfall-Übersteuerungen.
-
-Temperaturen sind auf konservative Bereiche beschränkt (Heizen 20–55 °C, Kühlen 5–25 °C, Warmwasser 40–60 °C); engere Servergrenzen haben Vorrang. Nummern werden mit ihrer °C-Einheit übertragen. Sterilisationsauslösung, Notfallaktionen und beliebige FIN-Ausdrücke sind nicht als Steuerungen freigegeben. Ob ein Punkt tatsächlich ein Bedienelement erhält, hängt zusätzlich von den Servermetadaten und Schreibrechten ab.
-
-## HACS / GitHub
-
-In HACS unter **Benutzerdefinierte Repositories** die URL `https://github.com/rommelfs/home-assistant-panasonic-cascade` eintragen und als Kategorie **Integration** auswählen. Danach herunterladen und Home Assistant neu starten. HACS-Katalogaufnahme und Hardware-Kompatibilität sind noch nicht bestätigt.
-
-Bei anderem Repository-Namen:
+If using a different repository name:
 
 ```sh
 python3 prepare_hacs.py OWNER/REPOSITORY --maintainer USERNAME
 ```
 
-Der Befehl ändert ausschließlich das lokale Manifest. Die Vorlage `validation-workflow.yml` prüft Protokolltests und Home-Assistant-Hassfest. Sie ist noch nicht aktiv: Die beim Veröffentlichen verwendete GitHub-Anmeldung erlaubt keine Workflow-Änderungen. Zur Aktivierung die Datei mit einem berechtigten Zugang nach `.github/workflows/validate.yml` verschieben. Eine Aufnahme in den allgemeinen HACS-Katalog ist ein gesonderter Schritt. Brand-Dateien und Lizenzwahl sind noch offen.
+This updates only the local manifest. The `validation-workflow.yml` template runs the test suite and Home Assistant Hassfest. It is inactive because the credential used for publication does not have workflow scope. To enable it, use an authorized credential to move it to `.github/workflows/validate.yml`. Inclusion in the default HACS catalog is a separate process. Brand assets and license selection remain open.
 
-## Prüfung und Grenzen
+English release notes are maintained under [docs/releases](docs/releases/). [CHANGELOG.md](CHANGELOG.md) links to each version. German UI localization remains available; this documentation change does not translate generated entity/dashboard names or change integration behavior.
 
-Lokal bestanden: **82 Tests**, darunter Protokolltests, Authentifizierungstests gegen einen lokalen aiohttp-Testserver und Tests des echten Home-Assistant-Konfigurationsdialogs (2026.10.0) mit nachgebildetem FIN-Backend. Dazu kommen Zone-1-Tests für alle Kombinationen, frische Abfragen, Übersteuerungen und gleichzeitige Bedienung sowie Dashboard-Tests einschließlich Speichern/Laden im echten Lovelace-Speicher. Weitere Tests prüfen Warmwasserfilterung über alle Plattformen, Optionen, das Ausblenden/Wiederherstellen vorhandener Dashboards und den Erhalt eigener Änderungen. Ergänzend geprüft: optionale Mehrfachabfragen mit einzelnen Fehlern, Detailcache, Alarmverlauf ohne Benutzer-/Auditdaten, Energie-Statistiken, Temperatur-Sentinel und neue Dashboard-Ansichten. Die Push-Tests verwenden einen lokal registrierten Home-Assistant-Testempfänger und prüfen neue Alarmepisoden, Bestätigung ohne Wiederholung, Neustart-Merker, Zielwechsel, Warmwasserfilter, Fehlversuche, parallele Abfragen, Entladen, Testknopf und Optionen. Es wurde dabei keine Nachricht an ein echtes Handy gesendet. Zusätzlich: Import- und Syntaxprüfung aller Integrationsmodule sowie Wiedergabe von 192 Daten-Grids / 308 Zeilen aus den ursprünglichen zwei HAR-Dateien. 54 eindeutige Datenpunkte wurden in den ursprünglichen Aufzeichnungen erfasst. Die neun zusätzlichen HAR-Dateien aus dem Webinterface wurden mit 3.675 Grids / 7.362 Zeilen wiedergegeben; sie enthalten 103 eindeutige Punktdatensätze. Alle 18 neu verwendeten Detailabfragen konnten zu aufgezeichneten Antworten zugeordnet werden. `point-inventory.json` enthält dafür nur generische Modellkennungen, Feldbezeichnungen und Einheiten, keine Anlagenkennungen oder Messwerte. Die umfangreiche Definitionsabfrage `defs()` wurde dabei ausgelassen, da sie keine Betriebsdaten liefert. Die Testdateien und `point-inventory.json` enthalten keine übernommenen Anmelde-Cookies, Tokens oder individuellen Referenz-IDs.
+## Validation and limitations
+
+The functional baseline passed **82 tests**, including:
+
+- Protocol parsing and authentication against a real local aiohttp test server.
+- The real Home Assistant **2026.10.0** configuration-flow classes with a simulated FIN backend.
+- Zone 1 combinations, fresh reads, overrides, and concurrent writes.
+- Dashboard save/load using native Lovelace storage, replacement protection, and preservation of user changes.
+- Domestic-hot-water filtering across entity platforms and reversible visibility.
+- Optional batch queries containing individual failures, detail caching, alarm history without user/audit records, energy statistics, missing-temperature handling, and dashboard generation.
+- Notifications using a locally registered Home Assistant test receiver: alarm episodes, acknowledgement without repetition, persistent restart markers, destination changes, domestic-hot-water filtering, failures, concurrent checks, unload cleanup, the test button, and setup.
+
+The notification tests did not send messages to a real phone. A complete running Home Assistant entry connected to the controller and hardware write operations still require live verification.
+
+Import and syntax checks were completed for all integration modules. Replay of the original two HAR files covered **192 grids / 308 rows** and **54 unique points**. The nine additional captures covered **3,675 grids / 7,362 rows** and **103 unique point records**. All **18 supplementary queries** were matched to captured responses. The large `defs()` query was excluded because it does not contain operating data.
+
+`point-inventory.json` contains only generic model identifiers, labels, units, and classification metadata, not installation identifiers or captured measurements. Tests and inventory files contain no captured session cookies, tokens, or installation-specific reference IDs.
+
+To run the checks locally:
 
 ```sh
-# Für den vollständigen Testumfang Python 3.14 verwenden.
+# Use Python 3.14 for the full test suite.
 python3 -m pip install -r requirements-dev.txt
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q custom_components
-python3 replay_har.py /PFAD/overview.har /PFAD/settings.har
+python3 replay_har.py /PATH/overview.har /PATH/settings.har
 ```
 
-Die Authentifizierungstests verwenden echte lokale HTTP-Anfragen mit erfundenen Konten und prüfen vollständigen Login, Cookie/Attestierung, mehrere Projekte, abgelaufene Sitzungen und fehlerhafte Zugangsdaten. Die SCRAM-Berechnung ist zusätzlich mit dem öffentlichen SHA-256-Testvektor aus RFC 7677 geprüft. Sie sind kein erfolgreicher Hardwaretest. Für den vollständigen Testumfang `requirements-dev.txt` installieren. Ohne `aiohttp` werden die lokalen Transporttests, ohne Home Assistant die Einrichtungstests übersprungen. Home Assistant liefert `aiohttp` zur Laufzeit selbst. Ein kompletter laufender Home-Assistant-Eintrag mit angeschlossener Anlage ist noch nicht geprüft.
+Authentication tests use invented accounts and cover login, cookies/attestation, multiple projects, expired sessions, and invalid credentials. SCRAM is also checked against the public SHA-256 test vector from RFC 7677. These are not successful hardware tests. Without `aiohttp`, local transport tests are skipped; without Home Assistant, setup tests are skipped. Home Assistant supplies `aiohttp` at runtime.
 
-Bei Änderungen der Anlagenstruktur die Integration neu laden, um neue Punkte zu erkennen. Keine automatische History-Übernahme, kein selbst errechneter COP aus den Leistungswerten, kein Climate-Entity und keine Browsersteuerung. Die Login-HAR enthält den Login-Bildschirm und seinen JavaScript-Code, aber nicht den abgeschickten Challenge-Austausch. Die Implementierung ist daher gegen Testserver geprüft und muss an der tatsächlichen Installation bestätigt werden.
+The login capture contains the login screen and its JavaScript client, but not the submitted challenge exchange. Authentication was reconstructed from that client and validated against test servers; actual installation compatibility must be confirmed. There is no automatic history backfill, locally calculated COP from power readings, climate entity, or browser control.
 
-Quellen für die Implementierung: bereitgestellte HAR-Dateien, [Haystack Zinc](https://project-haystack.org/doc/docHaystack/Zinc), [Haystack Auth](https://project-haystack.org/doc/docHaystack/Auth), [SCRAM-SHA-256 / RFC 7677](https://www.rfc-editor.org/rfc/rfc7677), [Home-Assistant-Konfigurationsdialog](https://developers.home-assistant.io/docs/core/integration/config_flow/), [DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data/), [HACS-Anforderungen](https://www.hacs.dev/docs/publish/integration/).
+Implementation references: supplied HAR captures, [Haystack Zinc](https://project-haystack.org/doc/docHaystack/Zinc), [Haystack authentication](https://project-haystack.org/doc/docHaystack/Auth), [SCRAM-SHA-256 / RFC 7677](https://www.rfc-editor.org/rfc/rfc7677), [Home Assistant config flows](https://developers.home-assistant.io/docs/core/integration/config_flow/), [DataUpdateCoordinator](https://developers.home-assistant.io/docs/integration_fetching_data/), and [HACS integration requirements](https://www.hacs.dev/docs/publish/integration/).

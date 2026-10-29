@@ -137,7 +137,7 @@
   },
   {
     "model": "coolCapacity1",
-    "name": "Kühlkapazität 1",
+    "name": "Cooling capacity 1",
     "kind": "Number",
     "unit": "Δ°C",
     "control": null,
@@ -145,7 +145,7 @@
   },
   {
     "model": "coolCapacity2",
-    "name": "Kühlkapazität 2",
+    "name": "Cooling capacity 2",
     "kind": "Number",
     "unit": "Δ°C",
     "control": null,
@@ -153,7 +153,7 @@
   },
   {
     "model": "coolModeHeatRecoveryModeEnergyConsumption",
-    "name": "Kühlen/Wärmerückgewinnung – Elektrische Leistung",
+    "name": "Cooling/heat recovery – Electrical power",
     "kind": "Number",
     "unit": "W",
     "control": null,
@@ -161,7 +161,7 @@
   },
   {
     "model": "coolModeHeatRecoveryModeEnergyConsumptionTotalMsb",
-    "name": "Kühlen/Wärmerückgewinnung – Aufgenommene Energie",
+    "name": "Cooling/heat recovery – Consumed energy",
     "kind": "Number",
     "unit": "kWh",
     "control": null,
@@ -169,7 +169,7 @@
   },
   {
     "model": "coolModeHeatRecoveryModeEnergyGeneration",
-    "name": "Kühlen/Wärmerückgewinnung – Thermische Leistung",
+    "name": "Cooling/heat recovery – Thermal power",
     "kind": "Number",
     "unit": "W",
     "control": null,
@@ -177,7 +177,7 @@
   },
   {
     "model": "coolModeHeatRecoveryModeEnergyGenerationTotalMsb",
-    "name": "Kühlen/Wärmerückgewinnung – Erzeugte Energie",
+    "name": "Cooling/heat recovery – Generated energy",
     "kind": "Number",
     "unit": "kWh",
     "control": null,
@@ -209,7 +209,7 @@
   },
   {
     "model": "direction",
-    "name": "Betriebsrichtung",
+    "name": "Operating direction",
     "kind": "Str",
     "unit": "",
     "control": null,
@@ -217,7 +217,7 @@
   },
   {
     "model": "errorCodeConnected",
-    "name": "Fehlercode (Rohwert)",
+    "name": "Error code (raw value)",
     "kind": "Number",
     "unit": "",
     "control": null,
@@ -225,7 +225,7 @@
   },
   {
     "model": "errorStatus",
-    "name": "Fehlerstatus",
+    "name": "Fault status",
     "kind": "Bool",
     "unit": "",
     "control": null,
@@ -233,7 +233,7 @@
   },
   {
     "model": "externalCompressorSw",
-    "name": "Externer Kompressorschalter",
+    "name": "External compressor switch",
     "kind": "Bool",
     "unit": "",
     "control": null,
@@ -241,7 +241,7 @@
   },
   {
     "model": "heatCapacity1",
-    "name": "Heizkapazität 1",
+    "name": "Heating capacity 1",
     "kind": "Number",
     "unit": "%",
     "control": null,
@@ -249,7 +249,7 @@
   },
   {
     "model": "heatCapacity2",
-    "name": "Heizkapazität 2",
+    "name": "Heating capacity 2",
     "kind": "Number",
     "unit": "%",
     "control": null,
@@ -257,7 +257,7 @@
   },
   {
     "model": "heatModeEnergyConsumption",
-    "name": "Heizen – Elektrische Leistung",
+    "name": "Heating – Electrical power",
     "kind": "Number",
     "unit": "W",
     "control": null,
@@ -265,7 +265,7 @@
   },
   {
     "model": "heatModeEnergyConsumptionTotalMsb",
-    "name": "Heizen – Aufgenommene Energie",
+    "name": "Heating – Consumed energy",
     "kind": "Number",
     "unit": "kWh",
     "control": null,
@@ -273,7 +273,7 @@
   },
   {
     "model": "heatModeEnergyGeneration",
-    "name": "Heizen – Thermische Leistung",
+    "name": "Heating – Thermal power",
     "kind": "Number",
     "unit": "W",
     "control": null,
@@ -281,7 +281,7 @@
   },
   {
     "model": "heatModeEnergyGenerationTotalMsb",
-    "name": "Heizen – Erzeugte Energie",
+    "name": "Heating – Generated energy",
     "kind": "Number",
     "unit": "kWh",
     "control": null,
@@ -313,7 +313,7 @@
   },
   {
     "model": "mode",
-    "name": "Betriebsart (Gerät)",
+    "name": "Operating mode (unit)",
     "kind": "Str",
     "unit": "",
     "control": null,
@@ -321,7 +321,7 @@
   },
   {
     "model": "operation",
-    "name": "Betriebsanforderung",
+    "name": "Operating request",
     "kind": "Bool",
     "unit": "",
     "control": null,
@@ -361,7 +361,7 @@
   },
   {
     "model": "quietRequest",
-    "name": "Leisemodus (Gerät)",
+    "name": "Quiet mode (unit)",
     "kind": "Str",
     "unit": "",
     "control": null,
@@ -417,7 +417,7 @@
   },
   {
     "model": "tBufferTank",
-    "name": "Δt Buffer Tank",
+    "name": "Buffer tank temperature difference",
     "kind": "Number",
     "unit": "°C",
     "control": null,
@@ -433,7 +433,7 @@
   },
   {
     "model": "tankModeEnergyConsumption",
-    "name": "Warmwasser – Elektrische Leistung",
+    "name": "Domestic hot water – Electrical power",
     "kind": "Number",
     "unit": "W",
     "control": null,
@@ -441,7 +441,7 @@
   },
   {
     "model": "tankModeEnergyConsumptionMsb",
-    "name": "Warmwasser – Aufgenommene Energie",
+    "name": "Domestic hot water – Consumed energy",
     "kind": "Number",
     "unit": "kWh",
     "control": null,
@@ -449,7 +449,7 @@
   },
   {
     "model": "tankModeEnergyGeneration",
-    "name": "Warmwasser – Thermische Leistung",
+    "name": "Domestic hot water – Thermal power",
     "kind": "Number",
     "unit": "W",
     "control": null,
@@ -457,7 +457,7 @@
   },
   {
     "model": "tankModeEnergyGenerationMsb",
-    "name": "Warmwasser – Erzeugte Energie",
+    "name": "Domestic hot water – Generated energy",
     "kind": "Number",
     "unit": "kWh",
     "control": null,
@@ -489,7 +489,7 @@
   },
   {
     "model": "tankWaterSetTemperature",
-    "name": "Warmwasser – Solltemperatur (Gerät)",
+    "name": "Domestic hot water – Unit setpoint temperature",
     "kind": "Number",
     "unit": "°C",
     "control": null,
@@ -521,7 +521,7 @@
   },
   {
     "model": "zone1WaterShiftRoomPoolSetpointTemperature",
-    "name": "Zone 1 – Solltemperatur (Gerät)",
+    "name": "Zone 1 – Unit setpoint temperature",
     "kind": "Number",
     "unit": "°C",
     "control": null,
@@ -553,7 +553,7 @@
   },
   {
     "model": "zone1Zone2OnOff",
-    "name": "Zone 1/2 – Zustand (Gerät)",
+    "name": "Zone 1/2 – Unit state",
     "kind": "Str",
     "unit": "",
     "control": null,
@@ -577,7 +577,7 @@
   },
   {
     "model": "zone2WaterShiftRoomPoolSetpointTemperature",
-    "name": "Zone 2 – Solltemperatur (Gerät)",
+    "name": "Zone 2 – Unit setpoint temperature",
     "kind": "Number",
     "unit": "°C",
     "control": null,
