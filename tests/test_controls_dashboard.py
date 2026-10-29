@@ -158,7 +158,7 @@ class DashboardTest(unittest.IsolatedAsyncioTestCase):
         target = SimpleNamespace(mode='storage', async_load=AsyncMock(side_effect=ConfigNotFound), async_save=AsyncMock())
         hass.data = {LOVELACE_DATA:SimpleNamespace(dashboards={'panasonic-cascade':target})}
         config = {'views':[{'cards':[]}]}
-        with patch.object(dashboard, 'build_dashboard', return_value=config):
+        with patch.object(dashboard, 'build_dashboard', return_value=config), patch.object(dashboard, 'save_dashboard_backup', new=AsyncMock()):
             await dashboard.populate_dashboard(hass, 'panasonic-cascade')
             target.async_save.assert_awaited_once_with(config)
             target.async_load.side_effect = None

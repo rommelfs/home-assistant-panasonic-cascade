@@ -1,11 +1,14 @@
 """Build a native dashboard using the installed entity registry IDs."""
 import asyncio
+from copy import deepcopy
+from datetime import UTC, datetime
 
 import voluptuous as vol
 
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.service import async_register_admin_service
+from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
 from .model import name, model_key
@@ -66,6 +69,12 @@ def build_dashboard(hass, entry_id=None):
     if not entities:
         raise HomeAssistantError("No enabled Cascade entities found; load the integration first")
     groups, controls, overview, temperatures, power, energy, alarms, efficiency, statistical_energy = {}, [], [], [], [], [], [], [], []
+    operating, hours, electrical_energy = [], [], []
+    point_models = {}
+    for entry in entries:
+        data = getattr(getattr(entry, "runtime_data", None), "data", {})
+        if isinstance(data, dict) and getattr(entry, "unique_id", None):
+            point_models.update({f"{entry.unique_id}|{ident}|curVal":model_key(row) for ident,row in data.items()})
     for entity in entities:
         label = entity.name or name({"dis": entity.original_name or entity.entity_id})
         row = {"entity": entity.entity_id, "name": label}
@@ -80,8 +89,15 @@ def build_dashboard(hass, entry_id=None):
         diagnostic = getattr(entity, "entity_category", None) == "diagnostic"
         if entity.domain == "sensor" and unit in ("Wh", "kWh"):
             energy.append(row)
-            if state and state.attributes.get("state_class") == "total_increasing":
+            capabilities = getattr(entity, "capabilities", None) or {}
+            state_class = (state.attributes.get("state_class") if state else None) or capabilities.get("state_class")
+            if state_class == "total_increasing":
                 statistical_energy.append(row)
+                key = point_models.get(entity.unique_id, "").casefold()
+                original = (entity.original_name or "").casefold()
+                if "energyconsumption" in key or any(word in original for word in (
+                        "aufgenommene energie", "consumed energy", "energy consumption", "electricity consumption", "stromverbrauch")):
+                    electrical_energy.append(row)
         if entity.domain == "sensor" and 'cop' in (entity.original_name or label).casefold():
             efficiency.append(row)
         if any(f"|summary:{key}|" in entity.unique_id for key in ("activeAlarms", "alarmHistory", "lastAlarm")):
@@ -94,6 +110,11 @@ def build_dashboard(hass, entry_id=None):
         if entity.domain == "binary_sensor" and any(
             entity.unique_id.endswith("|" + field) for field in ("isConnected", "isRunning", "isInAlarm")):
             overview.append(row)
+        if entity.domain == "binary_sensor" and entity.unique_id.endswith("|isRunning"):
+            operating.append(row)
+        if entity.domain == "sensor" and unit in ("h", "min", "s") and any(
+                word in (entity.original_name or label).casefold() for word in ("compressor", "betriebsstunden", "working hours", "laufzeit")):
+            hours.append(row)
     cards = heating_curve_cards([entry for entry in entries if entry.entry_id in allowed], entities)
     if controls:
         cards.append({"type": "entities", "title": "Steuerung", "show_header_toggle": False, "entities": controls})
@@ -115,11 +136,38 @@ def build_dashboard(hass, entry_id=None):
         {"title": "Übersicht", "path": "overview", "icon": "mdi:heat-pump", "cards": cards},
         {"title": "Alle Werte", "path": "details", "icon": "mdi:format-list-bulleted", "cards": details},
     ]
+    if operating or hours:
+        runtime_cards = []
+        if operating:
+            runtime_cards.extend([
+                {"type":"entities", "title":"Wärmepumpen – Betriebszustand", "show_header_toggle":False, "entities":operating},
+                {"type":"history-graph", "title":"Betrieb und Taktung – 24 Stunden", "hours_to_show":24, "entities":operating},
+            ])
+        if hours:
+            runtime_cards.extend([
+                {"type":"entities", "title":"Verdichter – Betriebsstunden", "show_header_toggle":False, "entities":hours},
+                {"type":"history-graph", "title":"Betriebsstunden – Verlauf", "hours_to_show":168, "entities":hours},
+            ])
+        if power:
+            runtime_cards.append({"type":"history-graph", "title":"Leistung während des Betriebs", "hours_to_show":24, "entities":power})
+        views.append({"title":"Laufzeiten & Taktung", "path":"runtime", "icon":"mdi:chart-timeline-variant", "cards":runtime_cards})
     if energy:
         energy_cards = [{"type":"entities", "title":"Energiezähler", "show_header_toggle":False, "entities":energy}]
+        energy_cards.append({"type":"history-graph", "title":"Energiezähler – Verlauf", "hours_to_show":168, "entities":energy})
+        if power:
+            energy_cards.append({"type":"history-graph", "title":"Elektrische und thermische Leistung", "hours_to_show":24, "entities":power})
         if statistical_energy:
             energy_cards.append({"type":"statistics-graph", "title":"Energie pro Tag", "chart_type":"bar", "period":"day",
                                  "days_to_show":7, "stat_types":["change"], "entities":[row["entity"] for row in statistical_energy]})
+        for period, title, days in (("hour", "Stündlich", 2), ("day", "Täglich", 30),
+                                    ("week", "Wöchentlich", 182), ("month", "Monatlich", 730),
+                                    ("year", "Jährlich", 3650)):
+            if electrical_energy:
+                energy_cards.append({"type":"statistics-graph", "title":f"Verbrauch von Elektrizität – {title}",
+                                     "chart_type":"bar", "period":period, "days_to_show":days,
+                                     "stat_types":["change"], "entities":deepcopy(electrical_energy)})
+        if not electrical_energy:
+            energy_cards.append({"type":"markdown", "content":"**Verbrauch von Elektrizität:** Kein geeigneter kumulativer Stromzähler mit Langzeitstatistik gefunden. Thermische Energie und kW-Leistungswerte werden nicht als Stromverbrauch verwendet."})
         views.append({"title":"Energie", "path":"energy", "icon":"mdi:lightning-bolt", "cards":energy_cards})
     if alarms:
         cards = [{"type":"entities", "title":"Alarme und Verlauf", "show_header_toggle":False, "entities":alarms}]
@@ -139,7 +187,88 @@ def build_dashboard(hass, entry_id=None):
     return {"title":"Panasonic Cascade", "views":views}
 
 
-async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False):
+def merge_dashboard(existing, generated):
+    """Add missing views, cards and entity rows; retain all existing user configuration."""
+    if existing.get("strategy"):
+        raise HomeAssistantError("Use a separate storage dashboard; strategy dashboards cannot be updated safely")
+    result = deepcopy(existing)
+
+    def walk(container):
+        for key in ("cards", "sections"):
+            for card in container.get(key, []):
+                if isinstance(card, dict):
+                    yield card
+                    yield from walk(card)
+        if isinstance(container.get("card"), dict):
+            yield container["card"]
+            yield from walk(container["card"])
+
+    def identity(card):
+        if card.get("type") == "custom:panasonic-cascade-heating-curve":
+            return (card["type"], tuple(sorted(card.get("entities", {}).items())))
+        return (card.get("type"), card.get("title"), card.get("entity"))
+
+    def entity_id(row):
+        return row if isinstance(row, str) else row.get("entity") if isinstance(row, dict) else None
+
+    for new_view in generated.get("views", []):
+        view = next((v for v in result.setdefault("views", []) if v.get("path") == new_view.get("path")), None)
+        if view is None:
+            result["views"].append(deepcopy(new_view))
+            continue
+        if view.get("type") == "panel" or view.get("panel"):
+            # A panel permits a single card: keep it intact and use a separate view.
+            path = str(new_view.get("path", "cascade")) + "-cascade"
+            extra = next((v for v in result["views"] if v.get("path") == path), None)
+            if extra is None:
+                extra = {**deepcopy(new_view), "path":path, "cards":[]}
+                result["views"].append(extra)
+            view = extra
+        for new_card in new_view.get("cards", []):
+            card = next((c for c in walk(view) if identity(c) == identity(new_card)), None)
+            if card is not None:
+                if card.get("type") in ("entities", "history-graph", "statistics-graph"):
+                    present = {entity_id(r) for r in card.get("entities", [])}
+                    for row in new_card.get("entities", []):
+                        ident = entity_id(row)
+                        if ident and ident not in present:
+                            card.setdefault("entities", []).append(deepcopy(row))
+                            present.add(ident)
+                continue
+            if view.get("type") == "sections":
+                view.setdefault("sections", []).append({"type":"grid", "cards":[deepcopy(new_card)]})
+            else:
+                view.setdefault("cards", []).append(deepcopy(new_card))
+    return result
+
+
+async def save_dashboard_backup(hass, url_path, config):
+    """Persist the previous configuration before any change; fail closed on storage errors."""
+    store = Store(hass, 1, f"{DOMAIN}.dashboard_backups")
+    saved = await store.async_load() or {}
+    backups = saved.setdefault(url_path, [])
+    backups.append({"created_at":datetime.now(UTC).isoformat(), "config":deepcopy(config)})
+    saved[url_path] = backups[-5:]
+    await store.async_save(saved)
+
+
+async def restore_dashboard(hass, url_path):
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+    lovelace = hass.data.get(LOVELACE_DATA)
+    target = lovelace.dashboards.get(url_path) if lovelace else None
+    if target is None or target.mode != "storage":
+        raise HomeAssistantError("No matching storage dashboard")
+    saved = await Store(hass, 1, f"{DOMAIN}.dashboard_backups").async_load() or {}
+    backups = saved.get(url_path, [])
+    if not backups:
+        raise HomeAssistantError("No dashboard backup available; backups start with integration 0.6.1")
+    config = deepcopy(backups[-1]["config"])
+    current = await target.async_load(False)
+    await save_dashboard_backup(hass, url_path, current)
+    await target.async_save(config)
+
+
+async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False, update=False):
     # Work through Lovelace's existing live dashboard, never edit .storage directly.
     from homeassistant.components.lovelace.const import LOVELACE_DATA
     from homeassistant.components.lovelace.dashboard import ConfigNotFound
@@ -148,6 +277,8 @@ async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False):
     target = lovelace.dashboards.get(url_path) if lovelace else None
     if target is None or target.mode != "storage":
         raise HomeAssistantError("Create an empty dashboard with this URL first (Settings → Dashboards)")
+    if update and overwrite:
+        raise HomeAssistantError("Choose update or overwrite, not both")
     config = build_dashboard(hass, entry_id)
     try:
         existing = await target.async_load(False)
@@ -159,8 +290,14 @@ async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False):
                 and not any(view.get(key) for key in ("cards", "badges", "sections"))
                 for view in existing.get("views", []))
     )
-    if not empty and not overwrite:
-        raise HomeAssistantError("Dashboard already contains a configuration; explicitly allow replacement or create a new dashboard")
+    if not empty and not overwrite and not update:
+        raise HomeAssistantError("Dashboard already contains a configuration; use update: true to preserve existing cards")
+    if update and not empty:
+        config = merge_dashboard(existing, config)
+    if config == existing:
+        return
+    if existing:
+        await save_dashboard_backup(hass, url_path, existing)
     await target.async_save(config)
 
 
@@ -177,4 +314,13 @@ def async_register_dashboard_service(hass):
         vol.Required("url_path"): vol.All(str, vol.Length(min=1)),
         vol.Optional("entry_id"): str,
         vol.Optional("overwrite", default=False): bool,
+        vol.Optional("update", default=False): bool,
+    }))
+
+    async def handle_restore(call):
+        async with lock:
+            await restore_dashboard(hass, call.data["url_path"])
+
+    async_register_admin_service(hass, DOMAIN, "restore_dashboard", handle_restore, schema=vol.Schema({
+        vol.Required("url_path"): vol.All(str, vol.Length(min=1)),
     }))

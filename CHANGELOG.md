@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.6.1](docs/releases/v0.6.1.md)
+
+Repair missing energy and runtime dashboard content. Restore hourly/daily/weekly/monthly/yearly electricity-consumption graphs. Add non-destructive dashboard updates, automatic configuration backups, and a restore action. Fix graph discovery when current states are temporarily unavailable.
+
 ## [0.6.0](docs/releases/v0.6.0.md)
 
 Zone 1 heating-curve controls and a bundled responsive curve card with immediate local preview, explicit Apply, and pointer/touch readout. Added control boundaries, frontend, and browser tests.

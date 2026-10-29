@@ -2,7 +2,7 @@
 
 Experimental custom integration for the local FIN/Haystack API used by the Panasonic Cascade Control web interface (`panCascadeControlExt`).
 
-The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.6.0** adds four Zone 1 heating-curve controls and a live curve card with an immediate local preview. Hardware writes have not yet been verified on a real installation.
+The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.6.1** restores energy and runtime dashboard views and adds non-destructive updates with dashboard backups. Zone 1 heating-curve controls and the live preview remain available. Hardware writes have not yet been verified on a real installation.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
@@ -52,7 +52,7 @@ The username and password are stored in Home Assistant's configuration. Automati
 
 Download the desired version in HACS and restart Home Assistant. Entity and device unique IDs are retained. Existing entity IDs and user-assigned names are preserved. Reloading the integration discovers new points when the plant structure changes.
 
-After an update that adds dashboard content, regenerate the Cascade dashboard as described below. This replaces any custom cards in the selected dashboard, so use a separate dashboard for personal layouts you want to retain.
+After updating, restart Home Assistant. Add new dashboard content with `populate_dashboard` and `update: true`, as described below. This preserves existing views, cards, display settings and custom entity names; it adds missing content. Do not use `overwrite: true` for routine updates.
 
 ## Alarm notifications on iPhone and other phones
 
@@ -149,10 +149,10 @@ Regenerate the integration dashboard after updating:
 action: panasonic_cascade.populate_dashboard
 data:
   url_path: panasonic-cascade
-  overwrite: true
+  update: true
 ```
 
-Use the actual URL path of your dashboard. This replaces custom cards in the selected dashboard. The generated overview includes a bundled **Zone 1 heating curve** card whenever all four matching entities are enabled. No third-party chart card is required. The JavaScript module is registered automatically by the integration; restart Home Assistant and reload the browser/app after updating. Without controls, the card displays a read-only curve using the sensor values.
+Requires 0.6.1 or later. Use the actual URL path of your dashboard. `update: true` preserves existing cards and adds missing content. The generated overview includes a bundled **Zone 1 heating curve** card whenever all four matching entities are enabled. No third-party chart card is required. The JavaScript module is registered automatically by the integration; restart Home Assistant and reload the browser/app after updating. Without controls, the card displays a read-only curve using the sensor values.
 
 Editing the card's four inputs updates the plotted curve **immediately as a local preview**, without waiting for controller polling. **Apply** sends only changed values through the existing number controls. **Discard preview** drops local edits; it does not undo commands already sent. Outside the two outdoor endpoints the curve is flat; between them it interpolates linearly. Endpoint coordinates and pointer/touch readout make the configured water temperature readable along the curve. Changes from elsewhere in Home Assistant update the graph when entity states arrive.
 
@@ -197,18 +197,34 @@ data:
 
 The generated dashboard provides an overview of controls, setpoints, power, temperatures, operating states, and histories; a device-grouped view of all values; and energy/alarm views when the corresponding entities are available. Histories and statistics fill as Home Assistant records data. Earlier controller history is not imported.
 
-The helper uses actual registered entity IDs, including renamed IDs and numeric suffixes. It requires administrator access and an existing storage-mode dashboard. It does not overwrite an existing configuration unless replacement is explicitly enabled.
+The helper uses actual registered entity IDs, including renamed IDs and numeric suffixes. It requires administrator access and an existing storage-mode dashboard. Populating an already configured dashboard requires either `update: true` (recommended) or explicit replacement.
 
-To regenerate a dashboard after enabling controls, discovering new equipment, or updating the integration, use:
+To add missing cards and entities after enabling controls, discovering new equipment, or updating the integration, use:
 
 ```yaml
 action: panasonic_cascade.populate_dashboard
 data:
   url_path: panasonic-cascade
-  overwrite: true
+  update: true
 ```
 
-This replaces custom cards in **that dashboard**. Other dashboards are retained. If Home Assistant has already initialized a new dashboard and the action reports that it contains a configuration, use `overwrite: true` for that intended target. The domestic-hot-water visibility option also applies to generated content.
+Available since 0.6.1. Safe updates retain existing views, cards, graph time ranges, layout settings and custom entity labels. Missing views/cards and entity rows are added; repeating the update does not duplicate the generated content. Sections layouts are supported. Existing single-card panel views are kept intact, with additions in a separate `-cascade` view. Strategy dashboards require a separate storage dashboard. The domestic-hot-water visibility option applies to generated content.
+
+The **Energy** view includes electrical and thermal power history, cumulative energy history, and separate **electricity consumption** bar charts for **hourly, daily, weekly, monthly and yearly** intervals. Electricity charts use changes in cumulative electrical-energy counters with long-term statistics; thermal generation and kW power readings are excluded. Existing energy statistics are reused. The available history determines how far each chart is populated; the integration does not reconstruct missing history or sum potentially overlapping series. If no suitable electrical counter exists, the dashboard explains this instead of drawing a misleading chart. These are native [statistics graph cards](https://www.home-assistant.io/dashboards/statistics-graph/).
+
+The **Runtime & cycling** view shows actual running-state timelines for the heat pumps (24 hours), available compressor/working-hour counters and their history, and power history for comparison. It does not invent cycle counts from operating requests or infer past run events from a cumulative hour counter. Recorder retention determines the available on/off timeline.
+
+Before any modification of an existing dashboard, version 0.6.1 or later saves a configuration backup in Home Assistant storage. Up to five previous configurations per dashboard are retained; a failed backup prevents the dashboard write. An identical update does not create another backup. To restore the latest saved configuration:
+
+```yaml
+action: panasonic_cascade.restore_dashboard
+data:
+  url_path: panasonic-cascade
+```
+
+The current configuration is backed up before restoring. These are local dashboard-configuration backups, not Recorder/database backups. **They cannot recover cards overwritten by version 0.6.0 or earlier:** those versions did not create these backups. Recover the exact original layout from a Home Assistant backup from before the replacement if available. Safe update can rebuild the integration's generated energy/runtime content, but cannot reconstruct unknown custom cards.
+
+`overwrite: true` remains available for an intentional full replacement, with a backup first. It cannot be combined with `update: true`. Avoid it for routine updates.
 
 ## Repository and development
 
@@ -226,12 +242,12 @@ English release notes are maintained under [docs/releases](docs/releases/). [CHA
 
 ## Validation and limitations
 
-The functional baseline passed **87 Python tests**, including:
+The functional baseline passed **95 Python tests**, including:
 
 - Protocol parsing and authentication against a real local aiohttp test server.
 - The real Home Assistant **2026.10.0** configuration-flow classes with a simulated FIN backend.
 - Zone 1 combinations, fresh reads, overrides, concurrent writes, heating-curve boundaries, number discovery, and frontend registration.
-- Dashboard save/load using native Lovelace storage, replacement protection, and preservation of user changes.
+- Dashboard save/load using native Lovelace storage, non-destructive/idempotent updates, preservation of custom graphs and layouts, backup/restore, failed-backup protection, five electricity-consumption periods, and runtime/energy views while current states are absent.
 - Domestic-hot-water filtering across entity platforms and reversible visibility.
 - Optional batch queries containing individual failures, detail caching, alarm history without user/audit records, energy statistics, missing-temperature handling, and dashboard generation.
 - Notifications using a locally registered Home Assistant test receiver: alarm episodes, acknowledgement without repetition, persistent restart markers, destination changes, domestic-hot-water filtering, failures, concurrent checks, unload cleanup, the test button, and setup.

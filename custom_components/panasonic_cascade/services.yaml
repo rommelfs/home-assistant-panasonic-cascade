@@ -1,10 +1,10 @@
 populate_dashboard:
   name: Populate Cascade dashboard
-  description: Populate an existing empty dashboard with current values and controls from the Cascade integration.
+  description: Populate an empty dashboard or add missing Cascade cards while preserving existing configuration with update enabled. Existing configurations are backed up before changes.
   fields:
     url_path:
       name: Dashboard URL path
-      description: The URL path of the empty dashboard, for example panasonic-cascade.
+      description: The dashboard URL path, for example panasonic-cascade.
       required: true
       example: panasonic-cascade
       selector:
@@ -21,3 +21,19 @@ populate_dashboard:
       default: false
       selector:
         boolean:
+    update:
+      name: Add missing cards and entities
+      description: Preserve existing views, cards, settings and entity names. Add missing Cascade content. Cannot be combined with replacement.
+      default: false
+      selector:
+        boolean:
+restore_dashboard:
+  name: Restore previous dashboard configuration
+  description: Restore the latest integration-managed backup. Backups start with version 0.6.1; this cannot recover a configuration overwritten by older versions. The current configuration is backed up before restoring.
+  fields:
+    url_path:
+      name: Dashboard URL path
+      required: true
+      example: panasonic-cascade
+      selector:
+        text:
