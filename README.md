@@ -6,6 +6,12 @@ The integration provides username/password authentication, project and installat
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
+## Tested equipment and software
+
+The reference installation uses **two Panasonic WH-WXG09ME8 outdoor units (9 kW each)** with **P-SMART EDGE v5.1**. The controller identifies the main unit's indoor/controller model as **WH-CME8** and the second unit as **Standalone**. Automated tests use **Home Assistant Core 2026.10.0 and Python 3.14**.
+
+See [tested installation and software versions](docs/tested-installations.md) for the evidence, unknown firmware versions, and the distinction between observed operation, automated tests, and outstanding hardware/phone verification. Compatibility with other models or controller versions has not been verified.
+
 ## Installation
 
 ### HACS
