@@ -2,7 +2,7 @@
 
 Experimental custom integration for the local FIN/Haystack API used by the Panasonic Cascade Control web interface (`panCascadeControlExt`).
 
-The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.6.1** restores energy and runtime dashboard views and adds non-destructive updates with dashboard backups. Zone 1 heating-curve controls and the live preview remain available. Hardware writes have not yet been verified on a real installation.
+The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.6.2** fixes binary sensor setup for on/off timelines and registers the heating-curve module before controller/platform setup and in dashboard resource storage. Energy/runtime views and non-destructive updates with backups remain available. Hardware writes have not yet been verified on a real installation.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
@@ -49,6 +49,9 @@ Existing cookie-based entries from 0.1.0 remain supported. Select **Reconfigure*
 The username and password are stored in Home Assistant's configuration. Automatically issued session cookies and attestation keys are not persisted in that configuration. Protect credentials and Home Assistant backups; do not publish them in GitHub or paste them into chat.
 
 ## Updating
+
+If binary entities are missing or the heating curve reports **Custom element doesn't exist**, update to **0.6.2 or later**, restart Home Assistant, and fully reload the browser/app. Earlier binary platform setup could fail with `NameError: name 'row' is not defined`; 0.6.2 fixes that error. It also registers the curve before controller/platform setup and persists its module in dashboard resources. Existing entity IDs and dashboard configurations are retained. A dashboard already containing these cards does not need to be replaced.
+
 
 Download the desired version in HACS and restart Home Assistant. Entity and device unique IDs are retained. Existing entity IDs and user-assigned names are preserved. Reloading the integration discovers new points when the plant structure changes.
 
@@ -152,7 +155,7 @@ data:
   update: true
 ```
 
-Requires 0.6.1 or later. Use the actual URL path of your dashboard. `update: true` preserves existing cards and adds missing content. The generated overview includes a bundled **Zone 1 heating curve** card whenever all four matching entities are enabled. No third-party chart card is required. The JavaScript module is registered automatically by the integration; restart Home Assistant and reload the browser/app after updating. Without controls, the card displays a read-only curve using the sensor values.
+Requires 0.6.1 or later. Use the actual URL path of your dashboard. `update: true` preserves existing cards and adds missing content. The generated overview includes a bundled **Zone 1 heating curve** card whenever all four matching entities are enabled. No third-party chart card is required. The JavaScript module is registered automatically by the integration before controller/platform setup. From 0.6.2 it is also added to storage-mode dashboard resources as `/panasonic_cascade/heating-curve.js?v=0.6.2` (JavaScript module); older/duplicate integration resource entries are updated. YAML resource configuration is left unchanged and still uses the global frontend module registration. Restart Home Assistant and fully reload the browser/app after updating. Without controls, the card displays a read-only curve using the sensor values.
 
 Editing the card's four inputs updates the plotted curve **immediately as a local preview**, without waiting for controller polling. **Apply** sends only changed values through the existing number controls. **Discard preview** drops local edits; it does not undo commands already sent. Outside the two outdoor endpoints the curve is flat; between them it interpolates linearly. Endpoint coordinates and pointer/touch readout make the configured water temperature readable along the curve. Changes from elsewhere in Home Assistant update the graph when entity states arrive.
 
@@ -212,7 +215,7 @@ Available since 0.6.1. Safe updates retain existing views, cards, graph time ran
 
 The **Energy** view includes electrical and thermal power history, cumulative energy history, and separate **electricity consumption** bar charts for **hourly, daily, weekly, monthly and yearly** intervals. Electricity charts use changes in cumulative electrical-energy counters with long-term statistics; thermal generation and kW power readings are excluded. Existing energy statistics are reused. The available history determines how far each chart is populated; the integration does not reconstruct missing history or sum potentially overlapping series. If no suitable electrical counter exists, the dashboard explains this instead of drawing a misleading chart. These are native [statistics graph cards](https://www.home-assistant.io/dashboards/statistics-graph/).
 
-The **Runtime & cycling** view shows actual running-state timelines for the heat pumps (24 hours), available compressor/working-hour counters and their history, and power history for comparison. It does not invent cycle counts from operating requests or infer past run events from a cumulative hour counter. Recorder retention determines the available on/off timeline.
+The **Runtime & cycling** view includes a native **Operation and cycling – 24 hours** history card with a simple horizontal **running/stopped band per heat pump**, updated from actual running-state sensors. It shows running-state timelines for the heat pumps (24 hours), available compressor/working-hour counters and their history, and power history for comparison. It does not invent cycle counts from operating requests or infer past run events from a cumulative hour counter. Recorder retention determines the available on/off timeline.
 
 Before any modification of an existing dashboard, version 0.6.1 or later saves a configuration backup in Home Assistant storage. Up to five previous configurations per dashboard are retained; a failed backup prevents the dashboard write. An identical update does not create another backup. To restore the latest saved configuration:
 
@@ -242,11 +245,11 @@ English release notes are maintained under [docs/releases](docs/releases/). [CHA
 
 ## Validation and limitations
 
-The functional baseline passed **95 Python tests**, including:
+The functional baseline passed **100 Python tests**, including:
 
 - Protocol parsing and authentication against a real local aiohttp test server.
 - The real Home Assistant **2026.10.0** configuration-flow classes with a simulated FIN backend.
-- Zone 1 combinations, fresh reads, overrides, concurrent writes, heating-curve boundaries, number discovery, and frontend registration.
+- Zone 1 combinations, fresh reads, overrides, concurrent writes, heating-curve boundaries, number discovery, complete binary platform setup with regular Boolean/alarm points and two heat pumps, and early frontend/resource registration.
 - Dashboard save/load using native Lovelace storage, non-destructive/idempotent updates, preservation of custom graphs and layouts, backup/restore, failed-backup protection, five electricity-consumption periods, and runtime/energy views while current states are absent.
 - Domestic-hot-water filtering across entity platforms and reversible visibility.
 - Optional batch queries containing individual failures, detail caching, alarm history without user/audit records, energy statistics, missing-temperature handling, and dashboard generation.

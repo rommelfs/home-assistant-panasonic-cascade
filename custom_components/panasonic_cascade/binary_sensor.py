@@ -21,6 +21,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class CascadeBinarySensor(CascadeEntity, BinarySensorEntity):
     def __init__(self, coordinator, ident, field="curVal"):
         super().__init__(coordinator, ident, field)
+        row = self.row
         if field == "isInAlarm" or (field == "curVal" and model_key(row) == "errorStatus"):
             self._attr_device_class = BinarySensorDeviceClass.PROBLEM
         elif field == "isConnected":

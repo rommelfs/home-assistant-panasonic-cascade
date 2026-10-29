@@ -11,6 +11,7 @@ from .frontend import async_setup_frontend
 
 
 async def async_setup_entry(hass, entry):
+    await async_setup_frontend(hass)
     config = {**entry.data, **entry.options}
     client = CascadeClient(async_get_clientsession(hass, verify_ssl=config.get("verify_ssl", True)), config)
     coordinator = CascadeCoordinator(hass, entry, client)
@@ -18,7 +19,6 @@ async def async_setup_entry(hass, entry):
     await async_apply_dhw_visibility(hass, entry, coordinator.all_data)
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    await async_setup_frontend(hass)
     async_register_dashboard_service(hass)
     if entry.options.get("alarm_notify_service"):
         monitor = AlarmMonitor(hass, entry, coordinator)

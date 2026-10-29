@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.6.2](docs/releases/v0.6.2.md)
+
+Fix binary sensor platform initialization (`row` NameError) so running-state entities can load for native on/off timelines. Register the heating-curve module early and persist/migrate dashboard resources to address missing custom-element errors. Existing cards and entity IDs are retained.
+
 ## [0.6.1](docs/releases/v0.6.1.md)
 
 Repair missing energy and runtime dashboard content. Restore hourly/daily/weekly/monthly/yearly electricity-consumption graphs. Add non-destructive dashboard updates, automatic configuration backups, and a restore action. Fix graph discovery when current states are temporarily unavailable.
