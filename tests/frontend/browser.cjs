@@ -22,6 +22,9 @@ const assert = require('node:assert/strict');
     assert.equal(result.error, undefined, result.error);
     assert.equal(result.passed.length, 9);
     console.log('Browser checks:', result.passed.join(', '));
+    const svg = page.locator('panasonic-cascade-heating-curve').locator('svg');
+    await svg.dispatchEvent('pointerdown', {clientX:400,pointerType:'touch'});
+    assert.match(await page.locator('panasonic-cascade-heating-curve').locator('.readout').textContent(), /Außen:.*Wasser:/);
     await page.locator('#result').evaluate(el => el.remove());
     await page.screenshot({path:'heating-curve-desktop.png'});
     for (const width of [320,375,768]) {

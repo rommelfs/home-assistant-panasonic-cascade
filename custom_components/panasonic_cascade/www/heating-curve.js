@@ -59,12 +59,14 @@ export class HeatingCurveCard extends HTMLElement {
       this.shadowRoot.querySelector('.apply').addEventListener('click', () => this._apply());
       this.shadowRoot.querySelector('.reset').addEventListener('click', () => { this._draft = {}; this._pending = {}; this._message = ''; this._error = false; this._render(); });
       const svg = this.shadowRoot.querySelector('svg');
-      svg.addEventListener('pointermove', event => {
+      const readPoint = event => {
         const {values, valid} = this._values(); if (!valid) return;
         const box = svg.getBoundingClientRect(), x = (event.clientX - box.left) * 680 / box.width;
         const outdoor = this._axisMin + Math.max(0, Math.min(1, (x - 60) / 590)) * (this._axisMax - this._axisMin);
         this.shadowRoot.querySelector('.readout').textContent = `${t.outdoor}: ${outdoor.toFixed(1)} °C → ${t.water}: ${temperatureAt(outdoor, values).toFixed(1)} °C`;
-      });
+      };
+      svg.addEventListener('pointermove', readPoint);
+      svg.addEventListener('pointerdown', readPoint);
       svg.addEventListener('pointerleave', () => { this.shadowRoot.querySelector('.readout').textContent = ''; });
       this._built = true;
     }
@@ -83,6 +85,7 @@ export class HeatingCurveCard extends HTMLElement {
   }
   _draw() {
     const {values: v, available, valid} = this._values(), t = this._t;
+    this.shadowRoot.querySelector('.readout').textContent = '';
     const dirty = Object.keys(this._draft).length > 0, pending = Object.keys(this._pending).length > 0;
     const editable = KEYS.every(k => this._config.entities[k].startsWith('number.'));
     this.shadowRoot.querySelector('.apply').disabled = !valid || !dirty || !editable || this._saving || pending;
