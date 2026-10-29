@@ -19,7 +19,7 @@ hass.states['number.outdoor_min'].state='unavailable';card.hass=hass;check('offl
 hass.states['number.outdoor_min'].state='-10';card.hass=hass;
 const outdoor=root.querySelector('[data-key="outdoor_min"]');outdoor.value=-12;outdoor.dispatchEvent(new Event('input'));
 hass.callService=async()=>{throw Error('controller refused')};await card._apply();check('failed write keeps draft and reports error',root.querySelector('.status').classList.contains('error')&&card._draft.outdoor_min==='-12');
-root.querySelector('.reset').click();
+root.querySelector('.reset').click();check('discard clears error styling',!root.querySelector('.status').classList.contains('error'));
 document.querySelector('#result').textContent=JSON.stringify({passed:checks});
 }catch(error){document.querySelector('#result').textContent=JSON.stringify({error:error.stack});}
 </script>

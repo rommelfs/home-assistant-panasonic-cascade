@@ -48,15 +48,16 @@ export class HeatingCurveCard extends HTMLElement {
     const t = LABELS[this._hass.language?.startsWith('de') ? 'de' : 'en']; this._t = t;
     if (!this._built) {
       this.shadowRoot.innerHTML = `<style>
-        :host{display:block}ha-card{display:block;padding:20px;color:var(--primary-text-color,#222);background:var(--ha-card-background,var(--card-background-color,#fff));border-radius:var(--ha-card-border-radius,12px)}
+        :host{display:block;container-type:inline-size}ha-card{display:block;padding:20px;color:var(--primary-text-color,#222);background:var(--ha-card-background,var(--card-background-color,#fff));border-radius:var(--ha-card-border-radius,12px)}
         h2{font-size:20px;font-weight:500;margin:0 0 20px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{font-size:14px;display:flex;flex-direction:column;gap:6px}input{box-sizing:border-box;width:100%;padding:10px;font:inherit;color:inherit;background:var(--secondary-background-color,#f5f5f5);border:1px solid var(--divider-color,#ccc);border-radius:6px}input:disabled{opacity:.7}
         svg{width:100%;height:auto;display:block;margin-top:14px;touch-action:pan-y}.grid{stroke:var(--divider-color,#ddd);stroke-width:1}.axis{fill:var(--secondary-text-color,#666);font:14px sans-serif}.curve{fill:none;stroke:var(--primary-color,#ef852b);stroke-width:3}.dot{fill:var(--primary-color,#ef852b)}
         .status{font-size:13px;min-height:2.6em;color:var(--secondary-text-color,#666)}.status.error{color:var(--error-color,#b00020)}.readout{font-variant-numeric:tabular-nums;text-align:center;min-height:1.4em;font-size:14px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}button{padding:10px 14px;border:1px solid var(--primary-color,#267ab5);border-radius:6px;font:inherit;background:transparent;color:var(--primary-color,#267ab5);cursor:pointer}button:disabled{opacity:.45;cursor:default}button:first-child{background:var(--primary-color,#267ab5);color:var(--text-primary-color,#fff)}
+        @container(max-width:480px){.axis{font-size:24px}}
         @media(max-width:380px){ha-card{padding:14px}.fields{gap:10px}label{font-size:12px}}
         </style><ha-card><h2></h2><div class="fields">${KEYS.map(k => `<label><span data-label="${k}"></span><input type="number" data-key="${k}" step="1"></label>`).join('')}</div><svg viewBox="0 0 680 300" role="img"></svg><div class="readout"></div><div class="status" role="status" aria-live="polite"></div><div class="actions"><button class="apply"></button><button class="reset"></button></div></ha-card>`;
-      for (const input of this.shadowRoot.querySelectorAll('input')) input.addEventListener('input', () => { this._draft[input.dataset.key] = input.value; this._message = ''; this._draw(); });
+      for (const input of this.shadowRoot.querySelectorAll('input')) input.addEventListener('input', () => { this._draft[input.dataset.key] = input.value; this._message = ''; this._error = false; this._draw(); });
       this.shadowRoot.querySelector('.apply').addEventListener('click', () => this._apply());
-      this.shadowRoot.querySelector('.reset').addEventListener('click', () => { this._draft = {}; this._pending = {}; this._message = ''; this._render(); });
+      this.shadowRoot.querySelector('.reset').addEventListener('click', () => { this._draft = {}; this._pending = {}; this._message = ''; this._error = false; this._render(); });
       const svg = this.shadowRoot.querySelector('svg');
       svg.addEventListener('pointermove', event => {
         const {values, valid} = this._values(); if (!valid) return;
@@ -96,9 +97,11 @@ export class HeatingCurveCard extends HTMLElement {
     const ymin = Math.floor((v.water_min - 3) / 5) * 5, ymax = Math.ceil((v.water_max + 3) / 5) * 5;
     const x = n => 60 + (n - xmin) / (xmax - xmin) * 590, y = n => 245 - (n - ymin) / (ymax - ymin) * 210;
     let content = '';
-    for (let i = 0; i <= 4; i++) {
-      const a = xmin + (xmax - xmin) * i / 4, b = ymin + (ymax - ymin) * i / 4;
-      content += `<path class="grid" d="M${x(a)},35V245 M60,${y(b)}H650"/><text class="axis" x="${x(a)}" y="268" text-anchor="middle">${Number(a.toFixed(1))}</text><text class="axis" x="49" y="${y(b)+5}" text-anchor="end">${Number(b.toFixed(1))}</text>`;
+    for (let a = xmin; a <= xmax; a += xmax - xmin <= 40 ? 5 : 10) {
+      content += `<path class="grid" d="M${x(a)},35V245"/><text class="axis" x="${x(a)}" y="268" text-anchor="middle">${a}</text>`;
+    }
+    for (let b = ymin; b <= ymax; b += ymax - ymin <= 40 ? 5 : 10) {
+      content += `<path class="grid" d="M60,${y(b)}H650"/><text class="axis" x="49" y="${y(b)+5}" text-anchor="end">${b}</text>`;
     }
     content += `<text class="axis" x="60" y="19">${t.water} / °C</text><text class="axis" x="650" y="294" text-anchor="end">${t.outdoor} / °C</text>`;
     const pairs = [[xmin,v.water_max],[v.outdoor_min,v.water_max],[v.outdoor_max,v.water_min],[xmax,v.water_min]];

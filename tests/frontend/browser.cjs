@@ -20,7 +20,7 @@ const assert = require('node:assert/strict');
     await page.waitForFunction(() => document.querySelector('#result').textContent.length > 0);
     const result = JSON.parse(await page.locator('#result').textContent());
     assert.equal(result.error, undefined, result.error);
-    assert.equal(result.passed.length, 8);
+    assert.equal(result.passed.length, 9);
     console.log('Browser checks:', result.passed.join(', '));
     await page.locator('#result').evaluate(el => el.remove());
     await page.screenshot({path:'heating-curve-desktop.png'});
