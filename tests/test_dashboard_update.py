@@ -63,6 +63,11 @@ class DashboardUpdateTest(unittest.IsolatedAsyncioTestCase):
         runtime=next(v for v in config['views'] if v['path']=='runtime')
         self.assertTrue(any(c['type']=='history-graph' and c['hours_to_show']==24 and 'binary_sensor.running' in str(c['entities']) for c in runtime['cards']))
         self.assertIn('sensor.hours',str(runtime))
+        # Unavailable states can exist without unit/state_class attributes.
+        hass.states.get.return_value=SimpleNamespace(attributes={})
+        with patch.object(dashboard.er,'async_get',return_value=registry),patch.object(dashboard.dr,'async_get',return_value=devices):
+            unavailable=dashboard.build_dashboard(hass)
+        self.assertEqual(unavailable,config)
 
     def test_electricity_consumption_has_five_periods_without_heat_output(self):
         hass,registry,devices=controls.DashboardTest().fixture()

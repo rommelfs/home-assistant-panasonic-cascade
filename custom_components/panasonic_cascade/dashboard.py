@@ -85,7 +85,7 @@ def build_dashboard(hass, entry_id=None):
         if entity.domain in ("switch", "select", "number"):
             controls.append(row)
         state = hass.states.get(entity.entity_id)
-        unit = state.attributes.get("unit_of_measurement") if state else entity.unit_of_measurement
+        unit = (state.attributes.get("unit_of_measurement") if state else None) or entity.unit_of_measurement
         diagnostic = getattr(entity, "entity_category", None) == "diagnostic"
         if entity.domain == "sensor" and unit in ("Wh", "kWh"):
             energy.append(row)
