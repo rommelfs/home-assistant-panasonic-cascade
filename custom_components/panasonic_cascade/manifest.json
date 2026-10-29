@@ -3,6 +3,7 @@
   "name": "Panasonic Cascade / Smart Edge",
   "after_dependencies": [
     "frontend",
+    "http",
     "lovelace",
     "mobile_app"
   ],
