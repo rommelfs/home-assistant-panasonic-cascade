@@ -5,11 +5,15 @@ DEFAULT_PROJECT = "pSmartEdge"
 # Only regular UI controls, never emergency overrides or sterilization triggers.
 BOOL_CONTROLS = {"sgReady", "stopRun"}
 ENUM_CONTROLS = {"quietModeRequest", "bufferMode", "zone1Zone2OnOffSetpoint"}
-# Conservative commissioning bounds for direct water-temperature setpoints.
+# Direct setpoints use conservative limits; heating-curve limits match captured metadata.
 NUMBER_CONTROLS = {
     "zone1WaterTemperatureHotSetpoint": (20, 55),
     "zone1WaterTemperatureColdSetpoint": (5, 25),
     "tankWaterTempSpBeforeSgReady": (40, 60),
+    "compensationCurveHeatZone1MaxTemperature": (20, 75),
+    "compensationCurveHeatZone1MinTemperature": (20, 75),
+    "compensationCurveHeatZone1OutdoorAirMaxTemperature": (-20, 15),
+    "compensationCurveHeatZone1OutdoorAirMinTemperature": (-20, 15),
 }
 STATUS_FIELDS = ("isConnected", "isOn", "isRunning", "isInAlarm", "isAvailableBuffer", "isAvailableTank", "run", "isEnabled", "isRunningBuffer", "isRunningTank", "runRequestBuffer")
 COUNT_FIELDS = ("runningUnitsAmount", "requiredUnitsAmount", "availableUnitsAmount", "configuredUnitsAmount", "runningUnitsAmountHot", "runningUnitsAmountCold", "numberOfZones")

@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:20px;background:#f4f6f8;font:16px system-ui}panasonic-cascade-heating-curve{display:block;max-width:700px;margin:auto}ha-card{box-shadow:0 2px 12px #0001}</style><panasonic-cascade-heating-curve></panasonic-cascade-heating-curve><pre id="result"></pre><script type="module">
+import {KEYS,temperatureAt} from "/heating-curve.js";
+const card=document.querySelector('panasonic-cascade-heating-curve'), calls=[];
+const values={water_max:42,outdoor_max:15,water_min:35,outdoor_min:-10};
+const entities=Object.fromEntries(KEYS.map(k=>[k,'number.'+k]));
+const hass={language:'de',states:Object.fromEntries(KEYS.map(k=>[entities[k],{state:String(values[k]),attributes:{min:k.startsWith('water')?20:-20,max:k.startsWith('water')?75:15}}])),callService:async(d,s,data)=>{calls.push(data);hass.states[data.entity_id]={...hass.states[data.entity_id],state:String(data.value)};card.hass=hass;}};
+card.setConfig({entities});card.hass=hass;
+let checks=[];const check=(name,yes)=>{if(!yes)throw Error(name);checks.push(name)};
+try{
+check('interpolation',Math.abs(temperatureAt(0,values)-39.2)<.0001);
+const root=card.shadowRoot,input=root.querySelector('[data-key="water_max"]'),before=root.querySelector('polyline').getAttribute('points');
+input.value=45;input.dispatchEvent(new Event('input'));
+check('instant preview',root.querySelector('polyline').getAttribute('points')!==before);
+check('preview performs no writes',calls.length===0&&root.querySelector('.status').textContent.includes('Vorschau'));
+await card._apply();check('apply only changed axis',calls.length===1&&calls[0].entity_id==='number.water_max'&&calls[0].value===45);
+input.value=80;input.dispatchEvent(new Event('input'));check('invalid values block apply',root.querySelector('.apply').disabled);await card._apply();check('invalid writes absent',calls.length===1);
+root.querySelector('.reset').click();
+hass.states['number.outdoor_min'].state='unavailable';card.hass=hass;check('offline chart hides stale data',!root.querySelector('polyline')&&root.querySelector('.apply').disabled);
+hass.states['number.outdoor_min'].state='-10';card.hass=hass;
+const outdoor=root.querySelector('[data-key="outdoor_min"]');outdoor.value=-12;outdoor.dispatchEvent(new Event('input'));
+hass.callService=async()=>{throw Error('controller refused')};await card._apply();check('failed write keeps draft and reports error',root.querySelector('.status').classList.contains('error')&&card._draft.outdoor_min==='-12');
+root.querySelector('.reset').click();
+document.querySelector('#result').textContent=JSON.stringify({passed:checks});
+}catch(error){document.querySelector('#result').textContent=JSON.stringify({error:error.stack});}
+</script>

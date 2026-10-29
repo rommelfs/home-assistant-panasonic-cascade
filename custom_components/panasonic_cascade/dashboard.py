@@ -8,9 +8,49 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.service import async_register_admin_service
 
 from .const import DOMAIN
-from .model import name
+from .model import name, model_key
+from .zinc import reference
 
 SERVICE = "populate_dashboard"
+
+
+CURVE_KEYS = {
+    "compensationCurveHeatZone1MaxTemperature": "water_max",
+    "compensationCurveHeatZone1MinTemperature": "water_min",
+    "compensationCurveHeatZone1OutdoorAirMaxTemperature": "outdoor_max",
+    "compensationCurveHeatZone1OutdoorAirMinTemperature": "outdoor_min",
+}
+
+
+def heating_curve_cards(entries, entities):
+    """Match actual IDs by point identity, independently for each installation/equipment."""
+    cards = []
+    for entry in entries:
+        data = getattr(getattr(entry, "runtime_data", None), "data", {})
+        if not isinstance(data, dict):
+            continue
+        points = {ident: (CURVE_KEYS[model_key(row)], reference(row.get("equipRef")))
+                  for ident, row in data.items() if model_key(row) in CURVE_KEYS}
+        if not points:
+            continue
+        groups = {}
+        # Prefer editable defaults; retain a read-only curve when controls are off.
+        for entity in sorted(entities, key=lambda e: e.domain == "number"):
+            if entity.config_entry_id != entry.entry_id or entity.domain not in ("sensor", "number"):
+                continue
+            prefix = entry.unique_id + "|"
+            if not entity.unique_id.startswith(prefix):
+                continue
+            ident, _, field = entity.unique_id[len(prefix):].partition("|")
+            if ident not in points or field != ("curVal|control" if entity.domain == "number" else "curVal"):
+                continue
+            key, equipment = points[ident]
+            groups.setdefault(equipment, {})[key] = entity.entity_id
+        for values in groups.values():
+            if len(values) == 4:
+                cards.append({"type": "custom:panasonic-cascade-heating-curve",
+                              "title": "Zone 1 – Heizkurve", "entities": values})
+    return cards
 
 
 def build_dashboard(hass, entry_id=None):
@@ -54,7 +94,7 @@ def build_dashboard(hass, entry_id=None):
         if entity.domain == "binary_sensor" and any(
             entity.unique_id.endswith("|" + field) for field in ("isConnected", "isRunning", "isInAlarm")):
             overview.append(row)
-    cards = []
+    cards = heating_curve_cards([entry for entry in entries if entry.entry_id in allowed], entities)
     if controls:
         cards.append({"type": "entities", "title": "Steuerung", "show_header_toggle": False, "entities": controls})
     else:

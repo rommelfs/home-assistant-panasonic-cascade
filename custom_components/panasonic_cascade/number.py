@@ -1,4 +1,4 @@
-"""Opt-in bounded water-temperature defaults."""
+"""Opt-in bounded temperature setpoints and heating-curve defaults."""
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 
 from .entity import CascadeEntity

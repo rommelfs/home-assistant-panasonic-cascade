@@ -219,6 +219,7 @@ class NotificationsTest(unittest.IsolatedAsyncioTestCase):
              patch.object(integration,'CascadeClient'), \
              patch.object(integration,'CascadeCoordinator',return_value=coordinator), \
              patch.object(integration,'async_apply_dhw_visibility',new=AsyncMock()), \
+             patch.object(integration,'async_setup_frontend',new=AsyncMock()), \
              patch.object(integration,'async_register_dashboard_service'), \
              patch.object(integration,'AlarmMonitor',return_value=monitor) as factory:
             self.assertTrue(await integration.async_setup_entry(hass,entry))

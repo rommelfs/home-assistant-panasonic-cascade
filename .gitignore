@@ -2,3 +2,5 @@ __pycache__/
 *.py[cod]
 .venv/
 *.har
+node_modules/
+heating-curve-*.png

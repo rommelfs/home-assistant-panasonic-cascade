@@ -100,7 +100,7 @@
     "name": "Water Temp - Max",
     "kind": "Number",
     "unit": "°C",
-    "control": null,
+    "control": "number",
     "dhw_only": false
   },
   {
@@ -108,7 +108,7 @@
     "name": "Water Temp - Min",
     "kind": "Number",
     "unit": "°C",
-    "control": null,
+    "control": "number",
     "dhw_only": false
   },
   {
@@ -116,7 +116,7 @@
     "name": "Outdoor Air Temp - Max",
     "kind": "Number",
     "unit": "°C",
-    "control": null,
+    "control": "number",
     "dhw_only": false
   },
   {
@@ -124,7 +124,7 @@
     "name": "Outdoor Air Temp - Min",
     "kind": "Number",
     "unit": "°C",
-    "control": null,
+    "control": "number",
     "dhw_only": false
   },
   {

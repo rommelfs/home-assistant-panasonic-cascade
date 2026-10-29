@@ -39,3 +39,7 @@ Catalog inclusion requires HACS maintainer review. A submitted pull request is n
 ## Scope of validation
 
 Automated tests and replayed HAR responses do not prove hardware write behavior or actual phone notification delivery. Preserve the limitations documented in the README and report live verification separately. Do not include real credentials or HAR captures in commits or release archives.
+
+## Heating curve frontend checks
+
+Run `node --test tests/frontend/math.test.mjs` for the dependency-free logic checks. For browser interaction and responsive checks, install Playwright 1.56.1 and its Chromium browser, then run `node tests/frontend/browser.cjs`. The dedicated frontend workflow runs both and saves screenshots. Browser fixtures use invented controller data only.

@@ -3,7 +3,12 @@ from .const import BOOL_CONTROLS, ENUM_CONTROLS, NUMBER_CONTROLS
 from .zinc import MARKER, Number, Ref, value
 
 
-POINT_LABELS = {'operation': 'Betriebsanforderung',
+POINT_LABELS = {
+ 'compensationCurveHeatZone1MaxTemperature': 'Zone 1 – Heizkurve – Max. Wassertemperatur',
+ 'compensationCurveHeatZone1MinTemperature': 'Zone 1 – Heizkurve – Min. Wassertemperatur',
+ 'compensationCurveHeatZone1OutdoorAirMaxTemperature': 'Zone 1 – Heizkurve – Max. Außentemperatur',
+ 'compensationCurveHeatZone1OutdoorAirMinTemperature': 'Zone 1 – Heizkurve – Min. Außentemperatur',
+'operation': 'Betriebsanforderung',
  'errorCodeConnected': 'Fehlercode (Rohwert)',
  'errorStatus': 'Fehlerstatus',
  'heatModeEnergyConsumption': 'Heizen – Elektrische Leistung',
@@ -78,11 +83,14 @@ def unit(row):
 
 def bounds(row):
     low, high = NUMBER_CONTROLS[model_key(row)]
-    for tag in ("minVal", "hotSpMin" if "Cold" not in model_key(row) else "coldSpMin"):
+    outdoor = "OutdoorAir" in model_key(row)
+    min_tags = ("minVal",) if outdoor else ("minVal", "hotSpMin" if "Cold" not in model_key(row) else "coldSpMin")
+    max_tags = ("maxVal",) if outdoor else ("maxVal", "hotSpMax" if "Cold" not in model_key(row) else "coldSpMax")
+    for tag in min_tags:
         raw = row.get(tag)
         if isinstance(raw, Number) and raw.unit in ("", "°C"):
             low = max(low, raw.value)
-    for tag in ("maxVal", "hotSpMax" if "Cold" not in model_key(row) else "coldSpMax"):
+    for tag in max_tags:
         raw = row.get(tag)
         if isinstance(raw, Number) and raw.unit in ("", "°C"):
             high = min(high, raw.value)

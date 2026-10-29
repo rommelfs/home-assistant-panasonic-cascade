@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.6.0](docs/releases/v0.6.0.md)
+
+Zone 1 heating-curve controls and a bundled responsive curve card with immediate local preview, explicit Apply, and pointer/touch readout. Added control boundaries, frontend, and browser tests.
+
 ## [0.5.2](docs/releases/v0.5.2.md)
 
 HACS catalog submission preparation: MIT license, original integration icons, active HACS/Hassfest/test workflow, and contributor guidance.

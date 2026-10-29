@@ -2,7 +2,7 @@
 
 Experimental custom integration for the local FIN/Haystack API used by the Panasonic Cascade Control web interface (`panCascadeControlExt`).
 
-The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.5.2** prepares the repository for HACS catalog submission with an MIT license, integration artwork, and automated validation. Hardware writes have not yet been verified on a real installation.
+The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.6.0** adds four Zone 1 heating-curve controls and a live curve card with an immediate local preview. Hardware writes have not yet been verified on a real installation.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
@@ -118,7 +118,7 @@ Existing native dashboard cards are cleaned of matching entity references; cards
 
 ## Optional controls and Zone 1 switching
 
-Open **Configure**, enable the experimental controls option, and save. Controls are disabled by default. Eight supported point models were identified in the captures:
+Open **Configure**, enable the experimental controls option, and save. Controls are disabled by default. Twelve supported point models were identified in the captures:
 
 | Control | FIN model |
 | --- | --- |
@@ -130,10 +130,47 @@ Open **Configure**, enable the experimental controls option, and save. Controls 
 | Zone 1 heating water setpoint | `zone1WaterTemperatureHotSetpoint` |
 | Zone 1 cooling water setpoint | `zone1WaterTemperatureColdSetpoint` |
 | Domestic-hot-water setpoint | `tankWaterTempSpBeforeSgReady` |
+| Zone 1 heating curve: max. water | `compensationCurveHeatZone1MaxTemperature` |
+| Zone 1 heating curve: min. water | `compensationCurveHeatZone1MinTemperature` |
+| Zone 1 heating curve: max. outdoor | `compensationCurveHeatZone1OutdoorAirMaxTemperature` |
+| Zone 1 heating curve: min. outdoor | `compensationCurveHeatZone1OutdoorAirMinTemperature` |
 
 Controls use only the **`pointSetDef` / Set Default** action advertised in point metadata. General switches, selectors, and temperature controls display `writeDef`, the default being edited. Separate point sensors display `curVal`, the currently effective value. Schedules and manual overrides can make these values differ. The integration does not create manual or emergency overrides.
 
-Temperature limits are conservative: **20–55 °C** for heating, **5–25 °C** for cooling, and **40–60 °C** for domestic hot water. Tighter controller limits take precedence. Numeric setpoints are sent with their °C unit. Sterilization triggers, emergency actions, and arbitrary FIN expressions are not exposed as controls. Actual control availability also depends on server metadata and write permissions.
+Temperature limits are conservative: **20–55 °C** for heating, **5–25 °C** for cooling, and **40–60 °C** for domestic hot water. The four heating-curve controls use the captured limits: **20–75 °C** for water endpoints and **−20 to +15 °C** for outdoor endpoints. Tighter controller limits take precedence; water-temperature limits do not restrict the outdoor axis. Numeric setpoints are sent with their °C unit. Sterilization triggers, emergency actions, and arbitrary FIN expressions are not exposed as controls. Actual control availability also depends on server metadata and write permissions.
+
+### Zone 1 heating curve and live preview
+
+Available since 0.6.0. Enable experimental controls in **Configure** to create four number entities named **Zone 1 – Heizkurve – … – Standardwert**. They are also editable from the device's entity list and through Home Assistant's `number.set_value` action. Existing point sensors remain available and keep their IDs.
+
+Regenerate the integration dashboard after updating:
+
+```yaml
+action: panasonic_cascade.populate_dashboard
+data:
+  url_path: panasonic-cascade
+  overwrite: true
+```
+
+Use the actual URL path of your dashboard. This replaces custom cards in the selected dashboard. The generated overview includes a bundled **Zone 1 heating curve** card whenever all four matching entities are enabled. No third-party chart card is required. The JavaScript module is registered automatically by the integration; restart Home Assistant and reload the browser/app after updating. Without controls, the card displays a read-only curve using the sensor values.
+
+Editing the card's four inputs updates the plotted curve **immediately as a local preview**, without waiting for controller polling. **Apply** sends only changed values through the existing number controls. **Discard preview** drops local edits; it does not undo commands already sent. Outside the two outdoor endpoints the curve is flat; between them it interpolates linearly. Endpoint coordinates and pointer/touch readout make the configured water temperature readable along the curve. Changes from elsewhere in Home Assistant update the graph when entity states arrive.
+
+The card blocks missing/out-of-range values and requires the minimum outdoor temperature to be below the maximum and the minimum water temperature not to exceed the maximum. It hides the curve when source values are unavailable. Editing the number entities separately bypasses the card's cross-field checks, so keep the four endpoints consistent when using automations or individual entity controls.
+
+**Apply is not an atomic four-value operation:** individual writes run sequentially. If one fails, earlier values may already have reached the controller; the card reports the failure and retains remaining edits for review. Controller-confirmed entity updates clear pending previews. The curve represents configured defaults, not measured water temperature or a guarantee of the effective operating setpoint. Schedules, overrides, and the controller's selected regulation mode can take precedence. Hardware writes still require live verification.
+
+For a manually maintained dashboard, add this card with your actual entity IDs (enable controls first for `number.*` IDs):
+
+```yaml
+type: custom:panasonic-cascade-heating-curve
+title: Zone 1 – Heating curve
+entities:
+  water_max: number.your_water_max
+  water_min: number.your_water_min
+  outdoor_max: number.your_outdoor_max
+  outdoor_min: number.your_outdoor_min
+```
 
 ### Dedicated Zone 1 switch
 
@@ -189,15 +226,17 @@ English release notes are maintained under [docs/releases](docs/releases/). [CHA
 
 ## Validation and limitations
 
-The functional baseline passed **82 tests**, including:
+The functional baseline passed **87 Python tests**, including:
 
 - Protocol parsing and authentication against a real local aiohttp test server.
 - The real Home Assistant **2026.10.0** configuration-flow classes with a simulated FIN backend.
-- Zone 1 combinations, fresh reads, overrides, and concurrent writes.
+- Zone 1 combinations, fresh reads, overrides, concurrent writes, heating-curve boundaries, number discovery, and frontend registration.
 - Dashboard save/load using native Lovelace storage, replacement protection, and preservation of user changes.
 - Domestic-hot-water filtering across entity platforms and reversible visibility.
 - Optional batch queries containing individual failures, detail caching, alarm history without user/audit records, energy statistics, missing-temperature handling, and dashboard generation.
 - Notifications using a locally registered Home Assistant test receiver: alarm episodes, acknowledgement without repetition, persistent restart markers, destination changes, domestic-hot-water filtering, failures, concurrent checks, unload cleanup, the test button, and setup.
+
+The bundled curve also has five Node.js tests for interpolation, preview/write separation, invalid values, error handling, and pending/read-only states, plus Chromium interaction and responsive-layout checks in the [frontend workflow](.github/workflows/frontend.yml).
 
 The notification tests did not send messages to a real phone. A complete running Home Assistant entry connected to the controller and hardware write operations still require live verification.
 
@@ -212,6 +251,7 @@ To run the checks locally:
 python3 -m pip install -r requirements-dev.txt
 python3 -m unittest discover -s tests -v
 python3 -m compileall -q custom_components
+node --test tests/frontend/math.test.mjs
 python3 replay_har.py /PATH/overview.har /PATH/settings.har
 ```
 
