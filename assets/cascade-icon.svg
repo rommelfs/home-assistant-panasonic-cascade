@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Heat pump cascade">
+<rect x="4" y="4" width="190" height="104" rx="16" fill="#EFFBFF" stroke="#167EA6" stroke-width="8"/>
+<path d="M 0 0 C -9 -10 -13 -35 4 -26 C 19 -17 13 -5 0 0 Z" transform="translate(60 56) rotate(0)" fill="#0496C7"/>
+<path d="M 0 0 C -9 -10 -13 -35 4 -26 C 19 -17 13 -5 0 0 Z" transform="translate(60 56) rotate(120)" fill="#0496C7"/>
+<path d="M 0 0 C -9 -10 -13 -35 4 -26 C 19 -17 13 -5 0 0 Z" transform="translate(60 56) rotate(240)" fill="#0496C7"/>
+<circle cx="60" cy="56" r="7" fill="#167EA6"/>
+<path d="M 118 36 H 164" fill="none" stroke="#167EA6" stroke-width="8" stroke-linecap="round"/>
+<path d="M 118 56 H 164" fill="none" stroke="#167EA6" stroke-width="8" stroke-linecap="round"/>
+<path d="M 118 76 H 164" fill="none" stroke="#167EA6" stroke-width="8" stroke-linecap="round"/>
+<rect x="4" y="148" width="190" height="104" rx="16" fill="#EFFBFF" stroke="#167EA6" stroke-width="8"/>
+<path d="M 0 0 C -9 -10 -13 -35 4 -26 C 19 -17 13 -5 0 0 Z" transform="translate(60 200) rotate(0)" fill="#0496C7"/>
+<path d="M 0 0 C -9 -10 -13 -35 4 -26 C 19 -17 13 -5 0 0 Z" transform="translate(60 200) rotate(120)" fill="#0496C7"/>
+<path d="M 0 0 C -9 -10 -13 -35 4 -26 C 19 -17 13 -5 0 0 Z" transform="translate(60 200) rotate(240)" fill="#0496C7"/>
+<circle cx="60" cy="200" r="7" fill="#167EA6"/>
+<path d="M 118 180 H 164" fill="none" stroke="#167EA6" stroke-width="8" stroke-linecap="round"/>
+<path d="M 118 200 H 164" fill="none" stroke="#167EA6" stroke-width="8" stroke-linecap="round"/>
+<path d="M 118 220 H 164" fill="none" stroke="#167EA6" stroke-width="8" stroke-linecap="round"/>
+<path d="M 194 56 H 228 Q 252 56 252 80 V 176 Q 252 200 228 200 H 194" fill="none" stroke="#167EA6" stroke-width="8" stroke-linecap="round"/>
+</svg>

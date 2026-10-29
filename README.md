@@ -2,7 +2,7 @@
 
 Experimental custom integration for the local FIN/Haystack API used by the Panasonic Cascade Control web interface (`panCascadeControlExt`).
 
-The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.5.1** provides English documentation; application behavior is unchanged from 0.5.0. Hardware writes have not yet been verified on a real installation.
+The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.5.2** prepares the repository for HACS catalog submission with an MIT license, integration artwork, and automated validation. Hardware writes have not yet been verified on a real installation.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
@@ -175,7 +175,9 @@ If using a different repository name:
 python3 prepare_hacs.py OWNER/REPOSITORY --maintainer USERNAME
 ```
 
-This updates only the local manifest. The `validation-workflow.yml` template runs the test suite and Home Assistant Hassfest. It is inactive because the credential used for publication does not have workflow scope. To enable it, use an authorized credential to move it to `.github/workflows/validate.yml`. Inclusion in the default HACS catalog is a separate process. Brand assets and license selection remain open.
+This updates only the local manifest. The active [validation workflow](.github/workflows/validate.yml) runs the test suite, Home Assistant Hassfest, and HACS validation without ignored checks. It runs on pushes, pull requests, a weekly schedule, and manual dispatch. Catalog inclusion is subject to review by the HACS maintainers.
+
+The project and original integration artwork are distributed under the [MIT license](LICENSE). Local brand images are included under `custom_components/panasonic_cascade/brand/`; Home Assistant supports these local images from version 2026.3 onward. This is an independent community integration, not an official Panasonic or Home Assistant product. See [CONTRIBUTING.md](CONTRIBUTING.md) for validation commands and the submission process.
 
 English release notes are maintained under [docs/releases](docs/releases/). [CHANGELOG.md](CHANGELOG.md) links to each version. German UI localization remains available; this documentation change does not translate generated entity/dashboard names or change integration behavior.
 

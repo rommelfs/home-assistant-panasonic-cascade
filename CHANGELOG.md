@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.5.2](docs/releases/v0.5.2.md)
+
+HACS catalog submission preparation: MIT license, original integration icons, active HACS/Hassfest/test workflow, and contributor guidance.
+
 ## [0.5.1](docs/releases/v0.5.1.md)
 
 Complete English release documentation, including the README, changelog, versioned release notes, dashboard action help, and generic point-inventory labels. No application logic changes.
