@@ -24,7 +24,7 @@ These are the models identified so far. Other models, controller software versio
 
 | Component | Version | Validation scope |
 | --- | --- | --- |
-| Integration baseline | **0.9.0** | Automated validation baseline. The owner confirmed commit `9004feb` (0.7.0) installed before this update. |
+| Integration baseline | **0.9.1** | Automated validation baseline. The owner confirmed commit `9004feb` (0.7.0) installed before this update. |
 | Home Assistant Core | **2026.10.0** | Pinned development dependency; actual Home Assistant classes with a simulated controller backend. This does not establish a minimum supported Core version. |
 | Python | **3.14** (local run: **3.14.6**) | Local test environment; CI selects Python 3.14. |
 | Functional test suite | **127 passing Python tests**, plus frontend checks | Protocol, authentication, setup, entities, controls, dashboard storage, domestic-hot-water visibility, and alarm notifications to a local test receiver. |

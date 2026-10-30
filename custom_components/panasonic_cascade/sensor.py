@@ -55,6 +55,8 @@ class CascadeSensor(CascadeEntity, SensorEntity):
                 '°C':1,'°F':1,'W':0,'kW':2,'Wh':0,'kWh':1,'h':0,'min':0,'s':0,
                 'Hz':0,'A':1,'V':0,'bar':2,'%':0,'%RH':0,
             }.get(u,2)
+            if field in COUNT_FIELDS or ident.endswith((':activeAlarms', ':alarmHistory')) or model_key(row) in ('errorCodeConnected', 'errorCode'):
+                self._attr_suggested_display_precision = 0
             # Do not infer cumulative energy statistics from ambiguous energy tags.
             if self._attr_device_class == SensorDeviceClass.ENERGY:
                 if row.get("hisTotalized") is MARKER:

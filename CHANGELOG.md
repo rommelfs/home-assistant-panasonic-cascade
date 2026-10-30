@@ -2,6 +2,11 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.9.1](docs/releases/v0.9.1.md)
+
+- Keep device identity in overview and graph labels while shortening rows within device groups. Repair labels affected by shared row objects in 0.9.0.
+- Display alarm counts and error codes as whole numbers.
+
 ## [0.9.0](docs/releases/v0.9.0.md)
 
 Use context-aware field labels and display-only rounding, separate additional settings from the overview, and consolidate read-only detail groups. Stop treating equipment operating enable as compressor cycling. Without a verified compressor-running signal, counters are unavailable with an explanation; no power-based estimation is used.

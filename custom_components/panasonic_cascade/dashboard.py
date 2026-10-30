@@ -230,6 +230,12 @@ def polish_dashboard(hass, config, registry=None):
     """Compact generated rows, choose canonical power, and dynamically hide missing readings."""
     registry = registry or er.async_get(hass)
     records = registry.entities
+    # Rows are reused when assembling overview, history and device groups. Each
+    # card must own its rows before a device-specific title removes prefixes.
+    for view in config.get('views', []):
+        for card in view.get('cards', []):
+            if isinstance(card.get('entities'), list):
+                card['entities'] = deepcopy(card['entities'])
     def uid(row):
         entry = records.get(row.get('entity') if isinstance(row,dict) else row)
         return entry.unique_id if entry else ''
@@ -486,7 +492,10 @@ def refresh_generated_cards(config, generated, registry):
                     for row in card['entities']:
                         prior=old.get(row['entity'],{})
                         original=registry.entities[row['entity']].original_name or ''
-                        if prior.get('name') and display_label(prior['name'],card.get('title','')) != display_label(original,card.get('title','')) and not any(t in prior['name'] for t in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve',' · In Betrieb',' – In Betrieb','Standardwert','Vorgabe')):
+                        # Repair short names leaked from a device card by 0.9.0.
+                        # A leaf-only default is not a personal dashboard label.
+                        default_leaf = display_label(original).split(' · ')[-1]
+                        if prior.get('name') and prior['name'] != default_leaf and display_label(prior['name'],card.get('title','')) != display_label(original,card.get('title','')) and not any(t in prior['name'] for t in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve',' · In Betrieb',' – In Betrieb','Standardwert','Vorgabe')):
                             row.update(prior)
             else:
                 for row in rows:
