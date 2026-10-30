@@ -1,4 +1,14 @@
 /* Panasonic Cascade heating curve. MIT. No external scripts or chart dependencies. */
+// Old cached HA index pages and YAML dashboards can still import this module
+// before app.js replaces the native registry. Do not capture HTMLElement or
+// register the card until HA has defined its root in the *current* registry.
+if (typeof document !== 'undefined' && document.querySelector('home-assistant')) {
+  const deadline = Date.now() + 60000;
+  while (!window.customElements.get('home-assistant')) {
+    if (Date.now() > deadline) throw new Error('Panasonic Cascade: Home Assistant element registry was not ready after 60 seconds');
+    await new Promise(resolve => setTimeout(resolve, 25));
+  }
+}
 export const KEYS = ['water_max', 'outdoor_max', 'water_min', 'outdoor_min'];
 export function temperatureAt(outdoor, v) {
   if (!KEYS.every(k => Number.isFinite(v[k])) || v.outdoor_min >= v.outdoor_max || v.water_min > v.water_max) return null;

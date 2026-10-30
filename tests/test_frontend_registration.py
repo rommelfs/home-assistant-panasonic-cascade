@@ -17,6 +17,22 @@ except ImportError:
 
 @unittest.skipIf(frontend is None,'Home Assistant required')
 class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
+    async def test_storage_resource_removes_early_module_but_preserves_other_scripts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            hass=HomeAssistant(directory)
+            resources=ResourceStorageCollection(hass,SimpleNamespace(async_load=AsyncMock(return_value={})))
+            hass.data[LOVELACE_DATA]=SimpleNamespace(resources=resources)
+            manager=frontend.frontend.UrlManager(lambda *args:None,[frontend.LEGACY_CARD_URL+'?v=old','/local/other.js'])
+            hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=manager
+            hass.http=SimpleNamespace(async_register_static_paths=AsyncMock())
+            await frontend.async_setup_frontend(hass)
+            self.assertEqual(manager.urls,frozenset(['/local/other.js']))
+            self.assertEqual(len(list(resources.async_items())),1)
+            hass.data[LOVELACE_DATA].resources=ResourceYAMLCollection([])
+            await frontend.async_setup_frontend(hass)
+            self.assertIn(frontend.module_url(hass),manager.urls)
+            await hass.async_stop()
+
     async def test_real_resource_storage_updates_old_url_and_retains_unrelated_resources(self):
         with tempfile.TemporaryDirectory() as directory:
             hass=HomeAssistant(directory)
@@ -25,7 +41,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             await resources.async_create_item({'url':frontend.CARD_URL+'?v=0.6.1','res_type':'module'})
             other=await resources.async_create_item({'url':'/local/other.js','res_type':'module'})
             hass.data[LOVELACE_DATA]=SimpleNamespace(resources=resources)
-            hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=Mock()
+            hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=frontend.frontend.UrlManager(lambda *args:None,[])
             hass.http=SimpleNamespace(async_register_static_paths=AsyncMock())
             with patch.object(frontend.frontend,'add_extra_js_url') as add:
                 await frontend.async_setup_frontend(hass)
@@ -36,7 +52,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(next(i for i in items if i['id']!=other['id'])['url'],frontend.module_url(hass))
             self.assertEqual(next(i for i in items if i['id']!=other['id'])['type'],'module')
             hass.http.async_register_static_paths.assert_awaited_once()
-            add.assert_called_once()
+            add.assert_not_called()
             await hass.async_stop()
 
     async def test_empty_resources_get_one_module_and_yaml_is_left_unchanged(self):
@@ -44,7 +60,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             hass=HomeAssistant(directory)
             resources=ResourceStorageCollection(hass,SimpleNamespace(async_load=AsyncMock(return_value={})))
             hass.data[LOVELACE_DATA]=SimpleNamespace(resources=resources)
-            hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=Mock()
+            hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=frontend.frontend.UrlManager(lambda *args:None,[])
             hass.http=SimpleNamespace(async_register_static_paths=AsyncMock())
             with patch.object(frontend.frontend,'add_extra_js_url'):
                 await frontend.async_setup_frontend(hass)
@@ -94,12 +110,12 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
                     self.assertIn("customElements.define('panasonic-cascade-heating-curve'",await response.text())
                 resources=ResourceStorageCollection(hass,SimpleNamespace(async_load=AsyncMock(return_value={})))
                 hass.data[LOVELACE_DATA]=SimpleNamespace(resources=resources)
-                hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=Mock()
+                hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=frontend.frontend.UrlManager(lambda *args:None,[])
                 with patch.object(frontend.frontend,'add_extra_js_url') as add:
                     hass.state=CoreState.running
                     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
                     await hass.async_block_till_done()
-                    add.assert_called_once_with(hass,frontend.module_url(hass))
+                    add.assert_not_called()
                 self.assertEqual(len(list(resources.async_items())),1)
             finally:
                 await client.close()

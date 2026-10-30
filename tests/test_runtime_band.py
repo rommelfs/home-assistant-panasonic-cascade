@@ -16,6 +16,21 @@ except ImportError:
 
 @unittest.skipIf(binary is None, 'Home Assistant required')
 class RuntimeBandTest(unittest.IsolatedAsyncioTestCase):
+    def test_power_running_uses_per_unit_total_and_not_operating_enable(self):
+        c=controls.coordinator()
+        c.data={'hp':{'id':zinc.Ref('hp','HP 01 - Main'),'equip':zinc.MARKER,'isRunning':True},
+                'summary:unit:hp:consumedPower':{'curVal':zinc.Number(0.199,'kW'),'curStatus':'ok'}}
+        entity=binary.CascadePowerRunningSensor(c,'hp')
+        self.assertFalse(entity.is_on)
+        c.data['summary:unit:hp:consumedPower']['curVal']=zinc.Number(0.2,'kW')
+        self.assertTrue(entity.is_on)
+        c.entry.options['power_threshold_w']=300
+        self.assertFalse(entity.is_on)
+        c.data['summary:unit:hp:consumedPower']['curStatus']='fault'
+        self.assertIsNone(entity.is_on)
+        self.assertFalse(entity.available)
+        self.assertEqual(entity.unique_id,'installation|hp|power_running')
+
     async def test_real_binary_setup_with_boolean_points_and_two_heat_pumps(self):
         c = controls.coordinator(); c.entry.runtime_data = c
         # A normal Bool point previously raised NameError before any entities were added.
@@ -58,3 +73,24 @@ class RuntimeBandTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([r['entity'] for r in band['entities']],
                          ['binary_sensor.renamed_pump_1_running','binary_sensor.renamed_pump_2_running'])
         self.assertNotIn('sensor.power',str(band))
+
+    def test_power_band_replaces_controller_flag_band_without_losing_history_range(self):
+        from copy import deepcopy
+        hass,registry,devices=controls.DashboardTest().fixture()
+        base=registry.entities['switch.zone_one']
+        for index in (1,2):
+            for suffix,label in [('isRunning','Betriebsfreigabe'),('power_running','Betrieb (Leistung)')]:
+                ident=f'binary_sensor.pump_{index}_{suffix.lower()}'
+                registry.entities[ident]=SimpleNamespace(**{**vars(base),'entity_id':ident,'domain':'binary_sensor',
+                    'unique_id':f'install|hp{index}|{suffix}','original_name':f'WP {index} · {label}'})
+        with patch.object(controls.dashboard.er,'async_get',return_value=registry),patch.object(controls.dashboard.dr,'async_get',return_value=devices):
+            generated=controls.dashboard.build_dashboard(hass)
+        old={'views':[{'path':'runtime','cards':[{'type':'history-graph','title':'Betriebsfreigabe – 24 Stunden',
+            'hours_to_show':48,'entities':['binary_sensor.pump_1_isrunning','binary_sensor.pump_2_isrunning']}]}]}
+        refreshed=controls.dashboard.refresh_generated_cards(deepcopy(old),generated,registry)
+        merged=controls.dashboard.merge_dashboard(refreshed,generated)
+        bands=[c for c in merged['views'][0]['cards'] if 'band' in c.get('title','') or '24 Stunden' in c.get('title','')]
+        self.assertEqual(len(bands),1)
+        self.assertEqual(bands[0]['hours_to_show'],48)
+        self.assertIn('power_running',str(bands[0]))
+        self.assertNotIn('isrunning',str(bands[0]))

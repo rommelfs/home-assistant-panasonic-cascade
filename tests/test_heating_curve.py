@@ -112,6 +112,6 @@ class HeatingCurveHATest(unittest.IsolatedAsyncioTestCase):
             await frontend.async_setup_frontend(hass)
             await frontend.async_setup_frontend(hass)
             hass.http.async_register_static_paths.assert_awaited_once()
-            add.assert_called_once_with(hass,frontend.module_url(hass))
+            add.assert_not_called()
         # Headless installations without the frontend still load core entities.
         await frontend.async_setup_frontend(SimpleNamespace(data={}))

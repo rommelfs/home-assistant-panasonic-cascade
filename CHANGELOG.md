@@ -2,6 +2,11 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.10.0](docs/releases/v0.10.0.md)
+
+- Fix the early extra-module/scoped-registry race; use only awaited resources on storage dashboards and guard fallback registration.
+- Add power-based cycling estimates with configurable 200 W per-unit threshold, Recorder-backed absolute daily counts and an on/off band.
+
 ## [0.9.1](docs/releases/v0.9.1.md)
 
 - Keep device identity in overview and graph labels while shortening rows within device groups. Repair labels affected by shared row objects in 0.9.0.

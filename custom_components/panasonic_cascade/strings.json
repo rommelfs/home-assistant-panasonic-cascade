@@ -59,14 +59,15 @@
     "step": {
       "init": {
         "title": "Polling and controls",
-        "description": "Controls change FIN default values. Schedules and manual overrides may take precedence. Writes have not been verified against real hardware. Disable domestic hot water to hide its sensors and controls. This does not change controller operation. Alarm push checks active alarms about every 5 seconds. On iPhone, delivery uses the Companion App and Apple push. Then press the device button \"Alarm-Push testen\". If no phone appears, first connect the Companion App and allow notifications.",
+        "description": "Controls change FIN default values. Schedules and manual overrides may take precedence. Writes have not been verified against real hardware. Disable domestic hot water to hide its sensors and controls. This does not change controller operation. Alarm push checks active alarms about every 5 seconds. On iPhone, delivery uses the Companion App and Apple push. Then press the device button \"Alarm-Push testen\". If no phone appears, first connect the Companion App and allow notifications. Cycling is estimated from electrical power (at/above threshold on, below off). Short phases between polls are not captured.",
         "data": {
           "scan_interval": "Polling interval (seconds)",
           "enable_controls": "Enable controls (experimental)",
           "verify_ssl": "Verify HTTPS certificate",
           "use_dhw": "Use domestic hot water",
           "alarm_notify_service": "Alarm push destination (iPhone: Apple Push / Companion App)",
-          "alarm_time_sensitive": "iPhone/iPad: time-sensitive alarm notifications"
+          "alarm_time_sensitive": "iPhone/iPad: time-sensitive alarm notifications",
+          "power_threshold_w": "Cycling: electrical power threshold per heat pump (W)"
         }
       }
     },

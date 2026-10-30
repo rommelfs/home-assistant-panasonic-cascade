@@ -63,7 +63,7 @@ def heating_curve_cards(entries, entities):
 def starts_table(entities):
     """Native Markdown table: explicit absolute counts for today and the past six days."""
     sources = [row['entity'] for row in entities]
-    headers = ["{{ state_attr('" + source + "', 'friendly_name') | default('WP', true) | replace(' · Starts heute','') | replace(' · Verdichterstarts heute','') | replace('|','/') | replace('\\n',' ') }}" for source in sources]
+    headers = ["{{ state_attr('" + source + "', 'friendly_name') | default('WP', true) | replace(' · Starts heute (Leistung)','') | replace(' · Verdichterstarts heute','') | replace(' · Starts heute','') | replace('|','/') | replace('\\n',' ') }}" for source in sources]
     content = TABLE_MARKER + "\n{% set pumps = " + repr(sources) + " %}\n"
     content += "{% set ns = namespace(usable=false) %}{% for source in pumps %}{% for day in state_attr(source, 'daily_starts') or [] %}{% if day.starts is not none %}{% set ns.usable = true %}{% endif %}{% endfor %}{% endfor %}\n{% if ns.usable %}\n"
     content += "| Tag | " + " | ".join(headers) + " |\n|---|" + "---:|" * len(sources) + "\n"
@@ -72,9 +72,9 @@ def starts_table(entities):
 | {{ 'Heute' if offset == 0 else 'Gestern' if offset == 1 else (now() - timedelta(days=offset)).strftime('%d.%m.%Y') }} |{% for source in pumps %}{% set item = (state_attr(source, 'daily_starts') or []) | selectattr('date', 'eq', date) | first | default(none) %} {{ item.starts if item and item.starts is not none else '—' }}{{ '*' if item and item.starts is not none and item.partial else '' }} |{% endfor %}
 {% endfor %}
 
-Verdichterstarts = bestätigte Aus→Ein-Wechsel. **—**: keine auswertbaren Daten. Sternchen: Erfassung unvollständig; Wert ist eine Mindestzahl.
+Leistungsbasierte Schätzung: Wechsel von unter die Schwelle auf mindestens die Schwelle ({% for source in pumps %}{{ state_attr(source, 'threshold_w') | default(200, true) }} W{{ ' / ' if not loop.last else '' }}{% endfor %} je WP). Kein direkter Verdichterstatus. Kurze Phasen zwischen Abfragen fehlen. **—**: keine auswertbaren Daten. Sternchen: Erfassung unvollständig; Wert ist eine Mindestzahl.
 {% else %}
-**Verdichtertaktung nicht verfügbar.** Der Regler liefert keinen bestätigten Verdichterstatus. „In Betrieb“/„Betriebsfreigabe“ wird nicht als Verdichterlauf gezählt. Keine Schätzung aus der Leistung.
+**Leistungsbasierte Taktung noch nicht verfügbar.** Es fehlen gespeicherte elektrische Leistungswerte je Wärmepumpe. Die Betriebsfreigabe wird nicht als Verdichterstatus gezählt.
 {% endif %}
 """
     return {"type":"markdown", "title":"Einschaltungen pro Tag", "content":content}
@@ -93,7 +93,7 @@ def build_dashboard(hass, entry_id=None):
     if not entities:
         raise HomeAssistantError("No enabled Cascade entities found; load the integration first")
     groups, controls, overview, temperatures, power, energy, alarms, efficiency, statistical_energy = {}, [], [], [], [], [], [], [], []
-    operating, hours, electrical_energy, starts = [], [], [], []
+    operating, hours, electrical_energy, starts, power_running = [], [], [], [], []
     point_models = {}
     for entry in entries:
         data = getattr(getattr(entry, "runtime_data", None), "data", {})
@@ -137,6 +137,8 @@ def build_dashboard(hass, entry_id=None):
         if entity.domain == "binary_sensor" and any(
             entity.unique_id.endswith("|" + field) for field in ("isConnected", "isRunning", "isInAlarm")):
             overview.append(row)
+        if entity.domain == "binary_sensor" and entity.unique_id.endswith("|power_running"):
+            power_running.append(row)
         if entity.domain == "sensor" and entity.unique_id.endswith("|starts_today"):
             starts.append(row)
         if entity.domain == "binary_sensor" and entity.unique_id.endswith("|isRunning"):
@@ -172,6 +174,8 @@ def build_dashboard(hass, entry_id=None):
     actual_hours = [row for row in hours if entity_models.get(row['entity']) == 'compressorTotalOnTimeMsb']
     if actual_hours:
         hours = actual_hours
+    if power_running:
+        operating = power_running
     if operating or hours or starts:
         runtime_cards = []
         if starts:
@@ -180,7 +184,7 @@ def build_dashboard(hass, entry_id=None):
         if operating:
             runtime_cards.extend([
                 {"type":"entities", "title":"Wärmepumpen – Betriebszustand", "show_header_toggle":False, "entities":operating},
-                {"type":"history-graph", "title":"Betriebsfreigabe – 24 Stunden", "hours_to_show":24, "entities":operating},
+                {"type":"history-graph", "title":"Taktungsband (Leistung) – 24 Stunden" if power_running else "Betriebsfreigabe – 24 Stunden", "hours_to_show":24, "entities":operating},
             ])
         if hours:
             runtime_cards.extend([
@@ -474,8 +478,8 @@ def refresh_generated_cards(config, generated, registry):
             if not isinstance(rows,list):continue
             ids = [r if isinstance(r,str) else r.get('entity') for r in rows if isinstance(r,(str,dict))]
             if not ids or not all(registry.entities.get(i) and registry.entities[i].platform==DOMAIN for i in ids):continue
-            if card.get('type')=='history-graph' and card.get('title')=='Betrieb und Taktung – 24 Stunden' and all(registry.entities[i].unique_id.endswith('|isRunning') for i in ids):
-                card['title']='Betriebsfreigabe – 24 Stunden'
+            if card.get('type')=='history-graph' and card.get('title') in ('Betrieb und Taktung – 24 Stunden','Betriebsfreigabe – 24 Stunden') and all(registry.entities[i].unique_id.endswith('|isRunning') for i in ids):
+                card['title']='Taktungsband (Leistung) – 24 Stunden' if 'Taktungsband (Leistung) – 24 Stunden' in defaults else 'Betriebsfreigabe – 24 Stunden'
             new = defaults.get(card.get('title'))
             if new and isinstance(new.get('entities'),list):
                 new_owners = {registry.entities[i].config_entry_id for r in new['entities'] if (i := r if isinstance(r,str) else r.get('entity')) in registry.entities}

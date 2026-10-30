@@ -166,6 +166,7 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             vol.Required('scan_interval', default=d.get('scan_interval', 30)): vol.All(vol.Coerce(int), vol.Range(min=15, max=300)),
             vol.Required('enable_controls', default=d.get('enable_controls', False)): bool,
             vol.Required('use_dhw', default=d.get('use_dhw', True)): bool,
+            vol.Required('power_threshold_w', default=d.get('power_threshold_w', 200)): vol.All(vol.Coerce(int), vol.Range(min=50, max=5000)),
             vol.Required('alarm_notify_service', default=d.get('alarm_notify_service', '')): selector.SelectSelector(selector.SelectSelectorConfig(options=targets)),
             vol.Required('alarm_time_sensitive', default=d.get('alarm_time_sensitive', True)): bool,
             vol.Required('verify_ssl', default=d.get('verify_ssl', self.config_entry.data.get('verify_ssl', True))): bool,

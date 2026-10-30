@@ -24,10 +24,10 @@ These are the models identified so far. Other models, controller software versio
 
 | Component | Version | Validation scope |
 | --- | --- | --- |
-| Integration baseline | **0.9.1** | Automated validation baseline. The owner confirmed commit `9004feb` (0.7.0) installed before this update. |
+| Integration baseline | **0.10.0** | Automated validation baseline. The owner confirmed commit `9004feb` (0.7.0) installed before this update. |
 | Home Assistant Core | **2026.10.0** | Pinned development dependency; actual Home Assistant classes with a simulated controller backend. This does not establish a minimum supported Core version. |
 | Python | **3.14** (local run: **3.14.6**) | Local test environment; CI selects Python 3.14. |
-| Functional test suite | **127 passing Python tests**, plus frontend checks | Protocol, authentication, setup, entities, controls, dashboard storage, domestic-hot-water visibility, and alarm notifications to a local test receiver. |
+| Functional test suite | **132 passing Python tests**, plus frontend checks | Protocol, authentication, setup, entities, controls, dashboard storage, domestic-hot-water visibility, and alarm notifications to a local test receiver. |
 
 Hassfest and HACS validation also passed for the 0.5.2 release. Their CI actions track upstream branches; they are validation tools, not controller software versions. See the [validation workflow](../.github/workflows/validate.yml) and [development requirements](../requirements-dev.txt).
 
@@ -35,7 +35,7 @@ Hassfest and HACS validation also passed for the 0.5.2 release. Their CI actions
 
 - **Observed on the installation:** controller models and interface version above, captured operating/diagnostic data, and integration entities reported in the owner's Home Assistant UI.
 - **Validated by capture replay and automated tests:** response parsing, optional diagnostics, dashboard generation, control request logic, authentication against test servers, and alarm notification handling.
-- **Compressor cycling limitation:** the equipment operating-enable flag remained on during observed low-power periods. No verified compressor-running point is currently supported; the integration does not substitute power-based estimates.
+- **Compressor cycling limitation:** the equipment operating-enable flag remained on during observed low-power periods. No verified compressor-running point is currently supported. Version 0.10.0 offers a clearly labeled power-based estimate instead, with a default 200 W threshold per unit; this is not a directly measured compressor state.
 - **Still requires live confirmation:** hardware writes such as Zone 1 on/off, the complete authentication/session-renewal lifecycle against this controller, and delivery of a real alarm notification to a phone. Phone model, iOS/Companion App versions, and end-to-end Apple push delivery have not been recorded.
 
 A test receiver accepting a notification does not prove that a phone displayed it. Likewise, valid control requests in automated tests do not prove that hardware executed them. See [Validation and limitations](../README.md#validation-and-limitations) for the detailed scope.

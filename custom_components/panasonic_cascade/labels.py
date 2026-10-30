@@ -59,6 +59,7 @@ def display_label(label, context=''):
     parts=[p.strip() for p in re.split(r'\s+[–·]\s+|\s+-\s+',text) if p.strip() and p.strip() not in ('Vorgabe','Standardwert','Energy')]
     context=compact_label(context)
     if context=='COP':parts=[p for p in parts if p not in ('COP aktuell','COP')]
+    if context=='Einschaltungen heute':parts=[p for p in parts if p!='Starts heute (Leistung)']
     if 'Betriebsstunden' in context:parts=[p for p in parts if p not in ('Verdichterstunden','Betriebsstunden')]
     if context.startswith('Verbrauch von Elektrizität'):parts=[p for p in parts if p!='Strom']
     if 'Leisemodus' in parts:parts=[p for p in parts if p!='Anforderung']

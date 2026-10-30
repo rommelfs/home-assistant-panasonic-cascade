@@ -1,5 +1,7 @@
-"""Read-only daily observed start counts, reconstructed from Recorder across restarts."""
+"""Power-based run phases and daily threshold crossings reconstructed from Recorder."""
 from functools import partial
+from math import isfinite
+from types import SimpleNamespace
 from datetime import timedelta
 import logging
 
@@ -21,18 +23,35 @@ LOGGER = logging.getLogger(__name__)
 HISTORY_DAYS = 7
 
 
-# No compressor-running point has been established in the captured controller API.
-# Add a model only after verifying its physical meaning; never infer it from power.
-VERIFIED_COMPRESSOR_STATUS_MODELS = frozenset()
+DEFAULT_POWER_THRESHOLD_W = 200
 
 
-def verified_compressor_source(hass, coordinator, ident):
-    for point, row in coordinator.data.items():
-        if (model_key(row) in VERIFIED_COMPRESSOR_STATUS_MODELS and row.get('kind') == 'Bool'
-                and (reference(row.get('heatPumpRef')) or reference(row.get('equipRef'))) == ident):
-            return er.async_get(hass).async_get_entity_id('binary_sensor', DOMAIN,
-                f'{coordinator.entry.unique_id}|{point}|curVal')
-    return None
+def power_threshold(coordinator):
+    return float(coordinator.entry.options.get('power_threshold_w', DEFAULT_POWER_THRESHOLD_W))
+
+
+def power_source(hass, coordinator, ident):
+    """Use only the explicit per-unit total, never a site total or mixed modes."""
+    return er.async_get(hass).async_get_entity_id('sensor', DOMAIN,
+        f'{coordinator.entry.unique_id}|summary:unit:{ident}:consumedPower|curVal')
+
+
+def power_on(raw, unit, threshold):
+    try:
+        watts = float(raw) * {'W': 1, 'kW': 1000}[unit]
+    except (ValueError, TypeError, KeyError):
+        return None
+    return watts >= threshold if isfinite(watts) and watts >= 0 else None
+
+
+def threshold_states(states, threshold):
+    """Preserve timestamps and gaps; units are read per recorded sample."""
+    converted = []
+    for sample in states:
+        active = power_on(sample.state, sample.attributes.get('unit_of_measurement'), threshold)
+        converted.append(SimpleNamespace(state='on' if active is True else 'off' if active is False else 'unavailable',
+                                        last_updated=sample.last_updated))
+    return converted
 
 
 def count_starts(states, start):
@@ -82,9 +101,11 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
 
     def __init__(self, coordinator, ident):
         super().__init__(coordinator, ident, 'starts_today')
-        self._attr_name = compact_label(name(self.row)) + ' · Verdichterstarts heute'
+        self._attr_name = compact_label(name(self.row)) + ' · Starts heute (Leistung)'
         self._count = None
         self._details = {}
+        self._history_cache = None
+        self._history_cache_key = None
 
     async def async_added_to_hass(self):
         await super().async_added_to_hass()
@@ -94,12 +115,19 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
         self._count = None
         today = dt_util.now().date()
         start = dt_util.as_utc(dt_util.start_of_local_day(today - timedelta(days=HISTORY_DAYS - 1)))
-        source = verified_compressor_source(self.hass, self.coordinator, self.ident)
+        source = power_source(self.hass, self.coordinator, self.ident)
+        threshold = power_threshold(self.coordinator)
+        cache_key = (today, source, threshold)
+        if self._history_cache_key == cache_key:
+            # Closed days do not change during normal polling. Backfill the
+            # week once per day/reload; otherwise query only today's samples.
+            start = dt_util.as_utc(dt_util.start_of_local_day(today))
         self._details = {'day':str(today), 'source_entity':source, 'partial_day':True,
                          'daily_starts':[], 'history_days':HISTORY_DAYS,
-                         'counting':'Confirmed compressor off → on transitions only; no power-based inference.'}
+                         'threshold_w':threshold, 'counting_method':'power_threshold',
+                         'counting':'Observed electrical power crossings below → at/above threshold; estimated compressor starts.'}
         if not source:
-            self._details['reason'] = 'No verified compressor-running status; controller isRunning is operating enable only'
+            self._details['reason'] = 'Per-unit electrical power sensor unavailable'
             return
         if DATA_INSTANCE not in self.hass.data:
             return
@@ -114,17 +142,23 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
         try:
             history = await recorder.async_add_executor_job(partial(
                 state_changes_during_period, self.hass, start, dt_util.utcnow(),
-                entity_id=source, no_attributes=True, include_start_time_state=True))
+                entity_id=source, no_attributes=False, include_start_time_state=True))
         except (HomeAssistantError, SQLAlchemyError, OSError) as err:
             LOGGER.debug('Could not read start-count history: %s', err)
             return
         if dt_util.now().date() != today:
             return
-        days = daily_counts(history.get(source, []), today)
+        days = daily_counts(threshold_states(history.get(source, []), threshold), today,
+                            days=1 if self._history_cache_key == cache_key else HISTORY_DAYS)
+        if self._history_cache_key == cache_key:
+            days += self._history_cache
+        else:
+            self._history_cache = days[1:]
+            self._history_cache_key = cache_key
         self._details['daily_starts'] = days
         self._count, self._details['partial_day'] = days[0]['starts'], days[0]['partial']
         current = self.hass.states.get(source)
-        if not current or current.state not in ('on', 'off'):
+        if not current or power_on(current.state, current.attributes.get('unit_of_measurement'), threshold) is None:
             self._details['partial_day'] = True
             days[0]['partial'] = True
 
