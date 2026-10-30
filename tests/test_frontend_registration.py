@@ -33,7 +33,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             items=list(resources.async_items())
             self.assertEqual(len(items),2)
             self.assertIn(other,items)
-            self.assertEqual(next(i for i in items if i['id']!=other['id'])['url'],frontend.CARD_URL+'?v=0.7.0')
+            self.assertEqual(next(i for i in items if i['id']!=other['id'])['url'],frontend.CARD_URL+'?v=0.8.0')
             self.assertEqual(next(i for i in items if i['id']!=other['id'])['type'],'module')
             hass.http.async_register_static_paths.assert_awaited_once()
             add.assert_called_once()
@@ -83,7 +83,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             client=TestClient(TestServer(hass.http.app))
             await client.start_server()
             try:
-                for path in (frontend.LEGACY_CARD_URL+'?v=0.6.2',frontend.CARD_URL+'?v=0.7.0'):
+                for path in (frontend.LEGACY_CARD_URL+'?v=0.6.2',frontend.CARD_URL+'?v=0.8.0'):
                     response=await client.get(path)
                     self.assertEqual(response.status,200)
                     self.assertIn('javascript',response.headers['Content-Type'])
@@ -95,7 +95,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
                     hass.state=CoreState.running
                     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
                     await hass.async_block_till_done()
-                    add.assert_called_once_with(hass,frontend.CARD_URL+'?v=0.7.0')
+                    add.assert_called_once_with(hass,frontend.CARD_URL+'?v=0.8.0')
                 self.assertEqual(len(list(resources.async_items())),1)
             finally:
                 await client.close()

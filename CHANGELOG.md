@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.8.0](docs/releases/v0.8.0.md)
+
+Refresh generated live cards with short labels, dynamic unknown/unavailable filtering and canonical power readings. Add instantaneous COP, a Momentanverbrauch card in Energy, and outdoor temperature to power history. Safely upgrade recognized existing dashboards and use a fresh heating-curve module URL after confirming a cached import failure in the desktop client.
+
 ## [0.7.1](docs/releases/v0.7.1.md)
 
 Display absolute observed start counts for today, yesterday and five earlier dates in a native dashboard table. Reconstruct seven local calendar days from Recorder and add the table automatically to recognized existing runtime views, with a backup and without replacing other cards. Missing history stays missing.

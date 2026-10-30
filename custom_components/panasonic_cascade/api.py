@@ -10,6 +10,7 @@ import aiohttp
 
 from .auth import AuthProtocolError, Scram, add_handshake, challenge, encode, hash_name, hmac_header, params
 from .diagnostics import queries, convert
+from .calculated import add_calculated_cop
 from .model import bounds, control_kind, enum_options
 from .zinc import MARKER, Number, Ref, REFERENCE, ZincError, parse_grids, quote, reference
 
@@ -233,6 +234,7 @@ class CascadeClient:
                              "curStatus": "ok" if isinstance(raw, Number) else "fault",
                              "siteRef": Ref(site_id), "unit": raw.unit if isinstance(raw, Number) else "kW"}
         await self._enrich(result, site_id)
+        add_calculated_cop(result, site_id)
         return result
 
     async def _enrich(self, result, site_id):

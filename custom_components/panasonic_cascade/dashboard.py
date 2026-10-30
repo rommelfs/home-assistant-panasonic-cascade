@@ -191,7 +191,7 @@ def build_dashboard(hass, entry_id=None):
             energy_cards.append({"type":"history-graph", "title":"Elektrische und thermische Leistung", "hours_to_show":24, "entities":power})
         if statistical_energy:
             energy_cards.append({"type":"statistics-graph", "title":"Energie pro Tag", "chart_type":"bar", "period":"day",
-                                 "days_to_show":7, "stat_types":["change"], "entities":[row["entity"] for row in statistical_energy]})
+                                 "days_to_show":7, "stat_types":["change"], "entities":deepcopy(statistical_energy)})
         for period, title, days in (("hour", "Stündlich", 2), ("day", "Täglich", 30),
                                     ("week", "Wöchentlich", 182), ("month", "Monatlich", 730),
                                     ("year", "Jährlich", 3650)):
@@ -217,7 +217,55 @@ def build_dashboard(hass, entry_id=None):
                 "{% endfor %}{% endif %}")
             cards.append({"type":"markdown", "title":row["name"], "content":content})
         views.append({"title":"Alarme", "path":"alarms", "icon":"mdi:alert-circle-outline", "cards":cards})
-    return {"title":"Panasonic Cascade", "views":views}
+    return polish_dashboard(hass, {"title":"Panasonic Cascade", "views":views}, registry)
+
+
+def polish_dashboard(hass, config, registry=None):
+    """Compact generated rows, choose canonical power, and dynamically hide missing readings."""
+    registry = registry or er.async_get(hass)
+    records = registry.entities
+    def uid(row):
+        entry = records.get(row.get('entity') if isinstance(row,dict) else row)
+        return entry.unique_id if entry else ''
+    def canonical(rows):
+        summaries = [r for r in rows if '|summary:' in uid(r) and any(':'+key+'|curVal' in uid(r) for key in ('consumedPower','generatedPower'))]
+        # Per-unit summaries and the explicit plant totals replace duplicated mode registers.
+        if summaries:
+            covered = {uid(r).split('|summary:',1)[0] for r in summaries}
+            return [r for r in rows if r in summaries or uid(r).split('|',1)[0] not in covered]
+        return rows
+    for view in config.get('views',[]):
+        for card in view.get('cards',[]):
+            if isinstance(card.get('entities'),list):
+                for row in card['entities']:
+                    if isinstance(row,dict):
+                        entity = records.get(row.get('entity'))
+                        if entity and not entity.name:
+                            row['name'] = compact_label(row.get('name') or entity.original_name or entity.entity_id)
+                if view.get('path') != 'details' and card.get('title') in ('Leistung','Leistungsverlauf','Leistung während des Betriebs','Elektrische und thermische Leistung'):
+                    card['entities'] = canonical(card['entities'])
+                if card.get('title') == 'COP':
+                    calculated = [r for r in card['entities'] if ':calculatedCop|curVal' in uid(r)]
+                    if calculated:card['entities'] = calculated
+        if view.get('path') in ('runtime','energy'):
+            overview = next((v for v in config['views'] if v.get('path')=='overview'),{})
+            powers = next((c['entities'] for c in overview.get('cards',[]) if c.get('title')=='Leistung'),[])
+            if powers and view['path']=='energy':
+                view['cards'].insert(0,{'type':'entities','title':'Momentanverbrauch','show_header_toggle':False,'entities':deepcopy(powers)})
+        for card in view.get('cards',[]):
+            if card.get('title') in ('Leistung während des Betriebs','Leistungsverlauf'):
+                overview = next((v for v in config['views'] if v.get('path')=='overview'),{})
+                temperatures = next((c['entities'] for c in overview.get('cards',[]) if c.get('title')=='Aktuelle Temperaturen'),[])
+                outside = [r for r in temperatures if any(t in r.get('name','').casefold() for t in ('aussen','outdoor air temperature'))]
+                card['entities'] += [deepcopy(r) for r in outside if r not in card['entities']]
+    # Native filtering updates on state changes, so recovering sensors reappear automatically.
+    for view in config.get('views',[]):
+        for index,card in enumerate(view.get('cards',[])):
+            if card.get('type') == 'entities':
+                view['cards'][index] = {'type':'entity-filter','title':card.get('title'),
+                    'entities':card['entities'], 'conditions':[{'condition':'state','state_not':['unknown','unavailable']}],
+                    'show_empty':False,'card':{k:v for k,v in card.items() if k!='entities'}}
+    return config
 
 
 def merge_dashboard(existing, generated):
@@ -239,7 +287,7 @@ def merge_dashboard(existing, generated):
     def identity(card):
         if card.get("type") == "custom:panasonic-cascade-heating-curve":
             return (card["type"], tuple(sorted(card.get("entities", {}).items())))
-        return (card.get("type"), card.get("title"), card.get("entity"))
+        return ("entities" if card.get("type") == "entity-filter" else card.get("type"), card.get("title"), card.get("entity"))
 
     def entity_id(row):
         return row if isinstance(row, str) else row.get("entity") if isinstance(row, dict) else None
@@ -260,9 +308,28 @@ def merge_dashboard(existing, generated):
         for new_card in new_view.get("cards", []):
             card = next((c for c in walk(view) if identity(c) == identity(new_card)), None)
             if card is not None:
+                if new_card.get('type') == 'entity-filter' and card.get('type') in ('entities','entity-filter'):
+                    # Preserve manually named rows and user options while refreshing the generated selection.
+                    old_rows = {r.get('entity'):r for r in card.get('entities',[]) if isinstance(r,dict)}
+                    replacement = deepcopy(new_card)
+                    present = {r['entity'] for r in replacement['entities']}
+                    replacement['entities'].extend(deepcopy(r) for r in card.get('entities',[]) if (r if isinstance(r,str) else r.get('entity')) not in present)
+                    for row in replacement['entities']:
+                        if not isinstance(row,dict):continue
+                        old = old_rows.get(row['entity'])
+                        if old and old.get('name') and compact_label(old['name']) != row.get('name'):
+                            # Old controller labels may have changed to localized names; compare registry below.
+                            if not any(token in old['name'] for token in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve')):
+                                row.update(old)
+                    if card.get('type') == 'entities':
+                        replacement['card'].update({k:v for k,v in card.items() if k not in ('type','title','entities')})
+                    else:
+                        replacement['card'].update({k:v for k,v in card.get('card',{}).items() if k not in ('type','title','entities')})
+                    card.clear();card.update(replacement)
+                    continue
                 if card.get('type') == 'markdown' and card.get('content','').startswith(TABLE_MARKER) and new_card.get('content','').startswith(TABLE_MARKER):
                     card['content'] = new_card['content']
-                if card.get("type") in ("entities", "history-graph", "statistics-graph"):
+                if card.get("type") in ("entities", "entity-filter", "history-graph", "statistics-graph"):
                     defaults = {entity_id(r):r.get('name') for r in new_card.get('entities', []) if isinstance(r,dict)}
                     for old_row in card.get('entities', []):
                         if isinstance(old_row, dict) and old_row.get('name') and defaults.get(entity_id(old_row)):
@@ -323,6 +390,49 @@ def clean_generated_overview(config, hass):
     return config
 
 
+def refresh_generated_cards(config, generated, registry):
+    """Refresh recognized default cards only; preserve layout, custom cards and graph ranges."""
+    def walk(container):
+        yield container
+        for key in ('cards','sections'):
+            for child in container.get(key,[]):
+                if isinstance(child,dict):yield from walk(child)
+    for view in config.get('views',[]):
+        source = next((v for v in generated.get('views',[]) if v.get('path')==view.get('path')),None)
+        if not source:continue
+        defaults = {c.get('title'):c for c in source.get('cards',[]) if c.get('title')}
+        for card in walk(view):
+            rows = card.get('entities')
+            if not isinstance(rows,list):continue
+            ids = [r if isinstance(r,str) else r.get('entity') for r in rows if isinstance(r,(str,dict))]
+            if not ids or not all(registry.entities.get(i) and registry.entities[i].platform==DOMAIN for i in ids):continue
+            new = defaults.get(card.get('title'))
+            if new and isinstance(new.get('entities'),list):
+                new_owners = {registry.entities[i].config_entry_id for r in new['entities'] if (i := r if isinstance(r,str) else r.get('entity')) in registry.entities}
+                if new_owners and any(registry.entities[i].config_entry_id not in new_owners for i in ids):continue
+            if view.get('path') != 'details' and new and isinstance(new.get('entities'),list) and card.get('type') in ('entities','entity-filter','history-graph','statistics-graph'):
+                if card.get('type') in ('history-graph','statistics-graph'):
+                    card['entities'] = deepcopy(new['entities'])
+                else:
+                    # Original controller-path labels are defaults, personal labels are retained.
+                    old = {r['entity']:r for r in rows if isinstance(r,dict)}
+                    options = {k:v for k,v in card.items() if k not in ('type','entities','title','card','conditions','show_empty')}
+                    card.clear();card.update(deepcopy(new))
+                    card.setdefault('card',{}).update(options)
+                    for row in card['entities']:
+                        prior=old.get(row['entity'],{})
+                        original=registry.entities[row['entity']].original_name or ''
+                        if prior.get('name') and compact_label(prior['name']) != compact_label(original) and not any(t in prior['name'] for t in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve')):
+                            row.update(prior)
+            else:
+                for row in rows:
+                    if isinstance(row,dict):
+                        entry=registry.entities[row['entity']]
+                        if not entry.name and (not row.get('name') or compact_label(row['name'])==compact_label(entry.original_name or '')):
+                            row['name']=compact_label(entry.original_name or row['entity'])
+    return config
+
+
 async def save_dashboard_backup(hass, url_path, config):
     """Persist the previous configuration before any change; fail closed on storage errors."""
     store = Store(hass, 1, f"{DOMAIN}.dashboard_backups")
@@ -334,7 +444,7 @@ async def save_dashboard_backup(hass, url_path, config):
 
 
 async def async_refresh_starts_tables(hass):
-    """Add only the daily table to recognized integration runtime views after startup."""
+    """Upgrade recognized generated views after startup, backing up before any save."""
     from homeassistant.components.lovelace.const import LOVELACE_DATA
     from homeassistant.components.lovelace.dashboard import ConfigNotFound
     lovelace = hass.data.get(LOVELACE_DATA)
@@ -375,6 +485,17 @@ async def async_refresh_starts_tables(hass):
                         view.setdefault('sections',[]).insert(0,{'type':'grid','cards':[table]})
                     else:
                         view.setdefault('cards',[]).insert(0,table)
+                recognized = any(c.get('type')=='custom:panasonic-cascade-heating-curve' and
+                    all(i in registry.entities and registry.entities[i].platform==DOMAIN for i in c.get('entities',{}).values()) and len(c.get('entities',{}))==4
+                    for v in config.get('views',[]) for c in walk(v))
+                owners = {registry.entities[i].config_entry_id for v in config.get('views',[]) for c in walk(v)
+                          if c.get('type')=='custom:panasonic-cascade-heating-curve'
+                          for i in c.get('entities',{}).values() if i in registry.entities}
+                if recognized and len(owners)==1:
+                    generated = build_dashboard(hass,entry_id=next(iter(owners)))
+                    config = refresh_generated_cards(config,generated,registry)
+                    config = merge_dashboard(config,generated)
+                    config = clean_generated_overview(config,hass)
                 if config != existing:
                     await save_dashboard_backup(hass,url_path,existing)
                     await target.async_save(config)
@@ -425,7 +546,7 @@ async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False, upd
     if not empty and not overwrite and not update:
         raise HomeAssistantError("Dashboard already contains a configuration; use update: true to preserve existing cards")
     if update and not empty:
-        config = merge_dashboard(existing, config)
+        config = merge_dashboard(refresh_generated_cards(deepcopy(existing),config,er.async_get(hass)), config)
     config = clean_generated_overview(config, hass)
     if config == existing:
         return

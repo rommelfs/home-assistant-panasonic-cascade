@@ -11,9 +11,22 @@ def compact_label(label):
         'Elektrische Leistung':'el. Leistung', 'Thermische Leistung':'Wärmeleistung',
         'Aufgenommene Energie':'Stromzähler', 'Erzeugte Energie':'Wärmezähler',
         'Compressor Total On Time':'Verdichterstunden',
+        'Floor - Site Info':'Anlage', 'Zone Group':'',
+        'Consumed electrical power':'Anlage · Strom', 'Generated thermal power':'Anlage · Wärme',
+        'Water Temperature - Inlet':'Rücklauf', 'Water Temperature - Outlet':'Vorlauf',
+        'Water Temperature - Setpoint':'Solltemperatur', 'Outdoor Air Temperature':'Außen',
+        'Water Temp - Zone 1 Cool Setpoint':'Zone 1 · Kühlen Soll',
+        'Water Temp - Zone 1 Heat Setpoint':'Zone 1 · Heizen Soll',
+        'Water Temp - Zone 2 Cool Setpoint':'Zone 2 · Kühlen Soll',
+        'Water Temp - Zone 2 Heat Setpoint':'Zone 2 · Heizen Soll',
+        'Water Temp - Actual Value':'Puffertemperatur', 'Water Temp - Zone 1':'Zone 1 · Wasser',
+        'Water Temp - Zone 2':'Zone 2 · Wasser', 'Δt Buffer Tank':'Puffer ΔT',
+        'Standardwert':'', 'Buffer':'Puffer', 'Quiet mode request':'Anforderung',
+        'Quiet mode':'Leisemodus', 'Smart Grid Ready':'SG Ready',
+
         'Betriebsstunden · Maximum':'Betriebsstunden max.', 'Betriebsstunden · Minimum':'Betriebsstunden min.',
         'Energy Consumption':'Stromzähler', 'Energy Generation':'Wärmezähler',
     }
     result = ' · '.join(dict.fromkeys(parts))
     for old,new in replacements.items():result = result.replace(old,new)
-    return result
+    return ' · '.join(p.strip() for p in result.split(' · ') if p.strip())

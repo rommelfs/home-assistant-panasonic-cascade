@@ -42,6 +42,8 @@ class CascadeSensor(CascadeEntity, SensorEntity):
     def __init__(self, coordinator, ident, field="curVal"):
         super().__init__(coordinator, ident, field)
         row = coordinator.data[ident]
+        if ident.endswith(':calculatedCop'):
+            self._attr_suggested_display_precision = 2
         diagnostic = field in CONFIG_FIELDS or row.get("diagnostic") is MARKER or model_key(row) in ("errorCodeConnected", "errorCode")
         if diagnostic:
             self._attr_entity_category = EntityCategory.DIAGNOSTIC

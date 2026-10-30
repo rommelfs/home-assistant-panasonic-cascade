@@ -20,7 +20,7 @@ class CascadeSwitch(CascadeEntity, SwitchEntity):
     def __init__(self, coordinator, ident):
         super().__init__(coordinator, ident)
         self._attr_unique_id += "|control"
-        self._attr_name += " – Standardwert"
+        self._attr_name += " · Vorgabe"
 
     @property
     def is_on(self):
