@@ -67,6 +67,7 @@ class FlowTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['type'], 'create_entry')
         self.assertEqual(result['data']['project'], 'two')
         self.assertEqual(result['data']['username'], 'test-user')
+        self.assertEqual(result['data']['password'], 'password')
         self.assertNotIn('session_cookie', result['data'])
         self.assertEqual(f.unique_id, 'https://controller.invalid|two|p:two:r:site')
 

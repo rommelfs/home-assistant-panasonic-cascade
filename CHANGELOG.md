@@ -2,6 +2,11 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.10.1](docs/releases/v0.10.1.md)
+
+- Recover reboot-invalidated sessions automatically using saved credentials; distinguish expired-session 403 responses from actual permission failures.
+- Keep temporary login/attestation/network failures retryable instead of stopping polling with manual reauthentication.
+
 ## [0.10.0](docs/releases/v0.10.0.md)
 
 - Fix the early extra-module/scoped-registry race; use only awaited resources on storage dashboards and guard fallback registration.

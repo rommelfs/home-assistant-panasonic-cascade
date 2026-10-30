@@ -58,6 +58,9 @@ class LocalLoginTest(unittest.IsolatedAsyncioTestCase):
         self.expire_once = False
         self.always_expire = False
         self.force_403 = False
+        self.expired_status = 401
+        self.login_status = None
+        self.attest_status = None
         self.bad_proof = False
         self.mechanism = 'SCRAM'
         self.password = 'test-password'
@@ -95,6 +98,8 @@ class LocalLoginTest(unittest.IsolatedAsyncioTestCase):
         return response
 
     async def authenticate(self, request):
+        if self.login_status is not None:
+            return web.Response(status=self.login_status)
         scheme, info = auth.challenge(request.headers.get('Authorization', ''))
         if scheme == 'hello':
             self.handshakes += 1
@@ -136,8 +141,10 @@ class LocalLoginTest(unittest.IsolatedAsyncioTestCase):
         return self.success('data=' + auth.encode('v=' + base64.b64encode(server_signature).decode()))
 
     async def attest(self, request):
+        if self.attest_status is not None:
+            return web.Response(status=self.attest_status)
         if request.cookies.get('skyarc-auth-test') != self.current_session:
-            return web.Response(status=401)
+            return web.Response(status=self.expired_status)
         return web.Response(text='ver:"3.0"\nusername\n"test-user"\n', headers={'fin-stack-auth':'attest-' + self.current_session})
 
     async def evaluate(self, request):
@@ -148,7 +155,7 @@ class LocalLoginTest(unittest.IsolatedAsyncioTestCase):
         if self.force_403:
             return web.Response(status=403)
         if request.cookies.get('skyarc-auth-test') != self.current_session or request.headers.get('SkyArc-Attest-Key') != 'attest-' + self.current_session:
-            return web.Response(status=401)
+            return web.Response(status=self.expired_status)
         expression = zinc.parse_grids(await request.text())[0][0]['expr']
         if expression == 'secureEval(projs())':
             text = 'ver:"3.0"\nid,name hidden,dis,routeStatus\n@p:one,"one","First","ok"\n@p:two,"two","Second","ok"\n'
@@ -176,6 +183,55 @@ class LocalLoginTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.handshakes, 2)
         self.assertEqual(c.project, 'two')
 
+    async def test_controller_reboot_invalidates_cookie_with_403_and_recovers_automatically(self):
+        c=self.client(); await c.projects(); c.project='two'
+        old_cookie=c.cookies['skyarc-auth-test'].value
+        self.current_session='controller-rebooted'; self.expired_status=403
+        await c.sites()
+        self.assertEqual(self.handshakes,2)
+        self.assertNotEqual(c.cookies['skyarc-auth-test'].value,old_cookie)
+        self.assertEqual(c.project,'two')
+        self.assertEqual(c.headers['SkyArc-Attest-Key'],'attest-'+self.current_session)
+
+    async def test_boot_login_and_attestation_unavailable_retry_on_later_poll(self):
+        c=self.client(); await c.projects(); c.project='two'
+        for login_status,attest_status in [(503,None),(200,None),(None,503),(None,401)]:
+            self.current_session='rebooted';self.login_status=login_status;self.attest_status=attest_status
+            with self.assertRaises(api.ApiError):await c.sites()
+            self.assertFalse(c.authenticated)
+            self.assertFalse(c.cookies)
+            self.login_status=self.attest_status=None
+            self.assertTrue(await c.sites())
+            self.assertEqual(c.project,'two')
+
+    async def test_ha_restart_reuses_persisted_credentials_in_a_new_client(self):
+        config={'url':'https://fixture.invalid','username':'test-user','password':'test-password','project':'two'}
+        for _ in range(2):
+            c=api.CascadeClient(self.session,config);c.url=self.local_url
+            await c.sites()
+        self.assertEqual(self.handshakes,2)
+
+    async def test_transport_outage_discards_stale_session_and_next_poll_logs_in(self):
+        from unittest.mock import patch
+        c=self.client();await c.projects();c.project='two'
+        request=c._request
+        async def disconnected(method,path,**kwargs):
+            if method=='POST':raise api.ApiError('Controller connection failed')
+            return await request(method,path,**kwargs)
+        with patch.object(c,'_request',side_effect=disconnected):
+            with self.assertRaises(api.ApiError):await c.sites()
+        self.assertFalse(c.authenticated)
+        self.assertFalse(c.cookies)
+        self.assertNotIn('SkyArc-Attest-Key',c.headers)
+        await c.sites()
+        self.assertEqual(self.handshakes,2)
+
+    async def test_concurrent_expired_requests_share_renewal_after_reboot(self):
+        c=self.client();await c.projects()
+        self.current_session='rebooted';self.expired_status=403
+        await asyncio.gather(c.projects(),c.projects())
+        self.assertEqual(self.handshakes,2)
+
     async def test_wrong_password_rejected(self):
         c = self.client(password='wrong')
         with self.assertRaises(api.AuthError):
@@ -185,7 +241,7 @@ class LocalLoginTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_permission_denied_does_not_repeat_login(self):
         c = self.client(); await c.projects(); self.force_403 = True
-        with self.assertRaises(api.AuthError):
+        with self.assertRaises(api.ApiError):
             await c.projects()
         self.assertEqual(self.handshakes, 1)
 
@@ -213,9 +269,13 @@ class LocalLoginTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_repeated_expiry_has_bounded_retry(self):
         c = self.client(); await c.projects(); self.always_expire = True
-        with self.assertRaises(api.AuthError):
+        with self.assertRaises(api.ApiError):
             await c.projects()
         self.assertEqual(self.handshakes, 2)
+        self.assertFalse(c.authenticated)
+        self.always_expire=False
+        await c.projects()
+        self.assertEqual(self.handshakes,3)
 
     async def test_concurrent_requests_share_one_login(self):
         c = self.client()

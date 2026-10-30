@@ -97,13 +97,22 @@ class CascadeClient:
         async with self.lock:
             await self._login()
 
-    async def _login(self):
-        if not self.username:
-            raise AuthError('No username configured for session renewal')
+    def _clear_session(self):
         self.authenticated = False
         self.cookies.clear()
         for key in ('Cookie', 'Authorization', 'SkyArc-Attest-Key'):
             self.headers.pop(key, None)
+
+    @staticmethod
+    def _session_rejected(status, text):
+        return (status in (301, 302, 303, 307, 308, 401) or
+                text.lstrip().lower().startswith(('<!doctype', '<html')) or
+                bool(re.search(r'errType:"[^"\n]*(?:AuthErr|AuthenticationErr)', text)))
+
+    async def _login(self):
+        if not self.username:
+            raise AuthError('No username configured for session renewal')
+        self._clear_session()
         try:
             status, headers, _ = await self._request('GET', '/user/auth', {'Authorization': 'HELLO username=' + encode(self.username)})
             scram = None
@@ -115,7 +124,9 @@ class CascadeClient:
                     first = add_handshake('SCRAM data=' + scram.first(), info)
                     status, headers, _ = await self._request('GET', '/user/auth', {'Authorization': first})
                     if status != 401:
-                        raise AuthError('SCRAM challenge failed')
+                        if status == 403:
+                            raise AuthError('SCRAM credentials rejected')
+                        raise ApiError('FIN login challenge not ready')
                     next_scheme, next_info = challenge(headers.get('www-authenticate', ''))
                     if next_scheme != 'scram' or hash_name(next_info.get('hash', info['hash'])) != algorithm:
                         raise AuthError('SCRAM scheme changed')
@@ -130,28 +141,31 @@ class CascadeClient:
                     raise AuthError('Unsupported FIN authentication scheme')
                 status, headers, _ = await self._request('GET', '/user/auth', {'Authorization': auth_header})
             if status != 200:
-                raise AuthError('Username/password authentication failed')
+                if status in (401, 403):
+                    raise AuthError('Username/password authentication failed')
+                raise ApiError(f'FIN login temporarily unavailable (HTTP {status})')
             auth_info = params(headers['authentication-info']) if headers.get('authentication-info') else {}
             if scram is not None and auth_info.get('data'):
-                scram.verify(auth_info['data'])
+                try:
+                    scram.verify(auth_info['data'])
+                except AuthProtocolError as err:
+                    raise AuthError('FIN server authentication proof invalid') from err
             if auth_info.get('authtoken'):
                 self.headers['Authorization'] = 'BEARER authToken=' + auth_info['authtoken']
             if not self.cookies and 'Authorization' not in self.headers:
-                raise AuthError('FIN did not issue a usable session')
+                raise ApiError('FIN did not yet issue a usable session')
             # finstack.GetAttestKey() uses this response header, not a fixed key.
             status, headers, text = await self._request('GET', '/finStackAuth')
             if status != 200 or text.lstrip().lower().startswith(('<html', '<!doctype')):
-                raise AuthError('FIN session validation failed')
+                raise ApiError('FIN session not ready after login')
             if headers.get('fin-stack-auth'):
                 self.headers['SkyArc-Attest-Key'] = headers['fin-stack-auth']
             self.authenticated = True
         except AuthProtocolError as err:
-            raise AuthError('FIN authentication protocol failed') from err
+            raise ApiError('FIN authentication protocol not ready or unsupported') from err
         finally:
             if not self.authenticated:
-                self.cookies.clear()
-                for key in ('Cookie', 'Authorization', 'SkyArc-Attest-Key'):
-                    self.headers.pop(key, None)
+                self._clear_session()
 
     async def eval(self, expression, project=None):
         return (await self._eval_request([expression], "eval", project))[0]
@@ -170,15 +184,34 @@ class CascadeClient:
                 await self._login()
             # Retry only an explicit expired/rejected session, at most once.
             for attempt in range(2):
-                status, headers, text = await self._request('POST', f'/api/{project}/{operation}', data=payload)
-                auth_failure = (status in (301, 302, 303, 307, 308, 401) or
-                                text.lstrip().lower().startswith(('<!doctype', '<html')) or
-                                bool(re.search(r'errType:"[^"\n]*(?:AuthErr|AuthenticationErr)', text)))
+                try:
+                    status, headers, text = await self._request('POST', f'/api/{project}/{operation}', data=payload)
+                except ApiError:
+                    if self.username:
+                        self._clear_session()
+                    raise  # Never replay an ambiguous transport failure/write.
+                auth_failure = self._session_rejected(status, text)
+                if status == 403 and self.username and not auth_failure:
+                    # FIN can reject a reboot-invalidated cookie with 403, but
+                    # also uses 403 for real permission failures. A read-only
+                    # session probe distinguishes them without a login loop.
+                    probe_status, _, probe_text = await self._request('GET', '/finStackAuth')
+                    auth_failure = self._session_rejected(probe_status, probe_text) or probe_status == 403
+                    if not auth_failure and probe_status != 200:
+                        self._clear_session()
+                        raise ApiError('FIN session check temporarily unavailable')
                 if auth_failure and self.username and attempt == 0:
                     await self._login()
                     continue
-                if auth_failure or status == 403:
-                    raise AuthError('Session expired or access denied')
+                if auth_failure:
+                    if self.username:
+                        self._clear_session()
+                        raise ApiError('FIN session not ready; automatic login will retry')
+                    raise AuthError('Legacy session expired; configure username/password for automatic renewal')
+                if status == 403:
+                    if not self.username:
+                        raise AuthError('Legacy session access denied; configure username/password')
+                    raise ApiError('FIN operation access denied')
                 if status != 200:
                     raise ApiError(f'FIN HTTP status {status}')
                 try:
