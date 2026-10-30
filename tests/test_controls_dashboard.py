@@ -45,7 +45,7 @@ class ControlsTest(unittest.IsolatedAsyncioTestCase):
     def test_names_and_existing_identity(self):
         c = coordinator()
         entity = switches.CascadeSwitch(c, 'point')
-        self.assertEqual(entity.name, 'Buffer – Zone1-Zone2 On/Off – Standardwert')
+        self.assertEqual(entity.name, 'Buffer · Zone1-Zone2 On/Off – Standardwert')
         self.assertEqual(entity.unique_id, 'installation|point|curVal|control')
         self.assertEqual(model.name({'dis':' | Primary Loop | run | '}), 'Primary Loop – run')
         self.assertEqual(model.name({'dis':'| |'}), 'Cascade point')

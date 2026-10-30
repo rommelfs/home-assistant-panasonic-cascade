@@ -12,6 +12,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
 from .model import name, model_key
+from .labels import compact_label
 from .zinc import reference
 
 SERVICE = "populate_dashboard"
@@ -69,14 +70,14 @@ def build_dashboard(hass, entry_id=None):
     if not entities:
         raise HomeAssistantError("No enabled Cascade entities found; load the integration first")
     groups, controls, overview, temperatures, power, energy, alarms, efficiency, statistical_energy = {}, [], [], [], [], [], [], [], []
-    operating, hours, electrical_energy = [], [], []
+    operating, hours, electrical_energy, starts = [], [], [], []
     point_models = {}
     for entry in entries:
         data = getattr(getattr(entry, "runtime_data", None), "data", {})
         if isinstance(data, dict) and getattr(entry, "unique_id", None):
             point_models.update({f"{entry.unique_id}|{ident}|curVal":model_key(row) for ident,row in data.items()})
     for entity in entities:
-        label = entity.name or name({"dis": entity.original_name or entity.entity_id})
+        label = entity.name or compact_label(name({"dis": entity.original_name or entity.entity_id}))
         row = {"entity": entity.entity_id, "name": label}
         device = devices.devices.get(entity.device_id)
         group = device.name_by_user or device.name if device else "Anlage"
@@ -87,7 +88,8 @@ def build_dashboard(hass, entry_id=None):
         state = hass.states.get(entity.entity_id)
         unit = (state.attributes.get("unit_of_measurement") if state else None) or entity.unit_of_measurement
         diagnostic = getattr(entity, "entity_category", None) == "diagnostic"
-        if entity.domain == "sensor" and unit in ("Wh", "kWh"):
+        site_placeholder = 'site info' in (entity.original_name or '').casefold() or 'site_info' in entity.entity_id
+        if entity.domain == "sensor" and unit in ("Wh", "kWh") and not site_placeholder:
             energy.append(row)
             capabilities = getattr(entity, "capabilities", None) or {}
             state_class = (state.attributes.get("state_class") if state else None) or capabilities.get("state_class")
@@ -96,7 +98,7 @@ def build_dashboard(hass, entry_id=None):
                 key = point_models.get(entity.unique_id, "").casefold()
                 original = (entity.original_name or "").casefold()
                 if "energyconsumption" in key or any(word in original for word in (
-                        "aufgenommene energie", "consumed energy", "energy consumption", "electricity consumption", "stromverbrauch")):
+                        "aufgenommene energie", "consumed energy", "energy consumption", "electricity consumption", "stromverbrauch", "stromzähler")):
                     electrical_energy.append(row)
         if entity.domain == "sensor" and 'cop' in (entity.original_name or label).casefold():
             efficiency.append(row)
@@ -110,15 +112,19 @@ def build_dashboard(hass, entry_id=None):
         if entity.domain == "binary_sensor" and any(
             entity.unique_id.endswith("|" + field) for field in ("isConnected", "isRunning", "isInAlarm")):
             overview.append(row)
+        if entity.domain == "sensor" and entity.unique_id.endswith("|starts_today"):
+            starts.append(row)
         if entity.domain == "binary_sensor" and entity.unique_id.endswith("|isRunning"):
             operating.append(row)
         if entity.domain == "sensor" and unit in ("h", "min", "s") and any(
-                word in (entity.original_name or label).casefold() for word in ("compressor", "betriebsstunden", "working hours", "laufzeit")):
+                word in (entity.original_name or label).casefold() for word in ("compressor", "betriebsstunden", "working hours", "laufzeit", "verdichterstunden")):
             hours.append(row)
     cards = heating_curve_cards([entry for entry in entries if entry.entry_id in allowed], entities)
+    curve_entities = {ident for card in cards for ident in card.get("entities", {}).values()}
+    controls = [row for row in controls if row["entity"] not in curve_entities]
     if controls:
         cards.append({"type": "entities", "title": "Steuerung", "show_header_toggle": False, "entities": controls})
-    else:
+    elif not cards:
         cards.append({"type": "markdown", "content": "**Steuerung aktivieren:** Einstellungen → Geräte & Dienste → Panasonic Cascade / Smart Edge → Konfigurieren → Steuerungen aktivieren. Anschließend dieses Dashboard erneut befüllen."})
     for title, rows in (("Leistung", power), ("Aktuelle Temperaturen", temperatures), ("Betriebszustand", overview), ("Alarme", alarms), ("COP", efficiency)):
         if rows:
@@ -136,8 +142,15 @@ def build_dashboard(hass, entry_id=None):
         {"title": "Übersicht", "path": "overview", "icon": "mdi:heat-pump", "cards": cards},
         {"title": "Alle Werte", "path": "details", "icon": "mdi:format-list-bulleted", "cards": details},
     ]
-    if operating or hours:
+    # Prefer actual per-unit compressor counters over repeated plant min/max diagnostics.
+    entity_models = {e.entity_id:point_models.get(e.unique_id,'') for e in entities}
+    actual_hours = [row for row in hours if entity_models.get(row['entity']) == 'compressorTotalOnTimeMsb']
+    if actual_hours:
+        hours = actual_hours
+    if operating or hours or starts:
         runtime_cards = []
+        if starts:
+            runtime_cards.append({"type":"entities", "title":"Einschaltungen heute", "show_header_toggle":False, "entities":starts})
         if operating:
             runtime_cards.extend([
                 {"type":"entities", "title":"Wärmepumpen – Betriebszustand", "show_header_toggle":False, "entities":operating},
@@ -228,6 +241,11 @@ def merge_dashboard(existing, generated):
             card = next((c for c in walk(view) if identity(c) == identity(new_card)), None)
             if card is not None:
                 if card.get("type") in ("entities", "history-graph", "statistics-graph"):
+                    defaults = {entity_id(r):r.get('name') for r in new_card.get('entities', []) if isinstance(r,dict)}
+                    for old_row in card.get('entities', []):
+                        if isinstance(old_row, dict) and old_row.get('name') and defaults.get(entity_id(old_row)):
+                            if compact_label(old_row['name']) == defaults[entity_id(old_row)]:
+                                old_row['name'] = defaults[entity_id(old_row)]
                     present = {entity_id(r) for r in card.get("entities", [])}
                     for row in new_card.get("entities", []):
                         ident = entity_id(row)
@@ -240,6 +258,47 @@ def merge_dashboard(existing, generated):
             else:
                 view.setdefault("cards", []).append(deepcopy(new_card))
     return result
+
+
+def clean_generated_overview(config, hass):
+    """Clean recognized integration rows only; retain custom cards and the full detail view."""
+    def walk(container):
+        yield container
+        for key in ('cards','sections'):
+            for child in container.get(key,[]):
+                if isinstance(child,dict):yield from walk(child)
+    managed = ('Steuerung','Energiezähler','Verdichter – Betriebsstunden','Betriebsstunden – Verlauf','Energiezähler – Verlauf','Energie pro Tag')
+    def owned(card):
+        return card.get('title') in managed or card.get('title','').startswith('Verbrauch von Elektrizität – ')
+    if not any(owned(c) for v in config.get('views',[]) for c in walk(v)):
+        return config
+    registry = er.async_get(hass)
+    has_hours = any(not e.disabled and not e.hidden and any(word in (e.original_name or '').casefold() for word in ('compressor total on time','verdichterstunden')) for e in registry.entities.values())
+    for view in config.get('views',[]):
+        if view.get('path') == 'details':continue
+        all_cards = list(walk(view))
+        curve_ids = {ident for card in all_cards if card.get('type') == 'custom:panasonic-cascade-heating-curve'
+                     for ident in card.get('entities',{}).values()}
+        for card in all_cards:
+            if not owned(card):
+                continue
+            if not isinstance(card.get('entities'),list):continue
+            kept=[]
+            for row in card['entities']:
+                ident=row if isinstance(row,str) else row.get('entity') if isinstance(row,dict) else None
+                entity=registry.entities.get(ident)
+                if not entity or entity.platform != DOMAIN:
+                    kept.append(row);continue
+                original=(entity.original_name or '').casefold()
+                if card.get('title') == 'Steuerung' and ident in curve_ids:continue
+                if view.get('path') == 'energy' and ('site info' in original or 'site_info' in ident):continue
+                if has_hours and card.get('title') in ('Verdichter – Betriebsstunden','Betriebsstunden – Verlauf') and '|summary:unit:' in entity.unique_id and any(x in entity.unique_id for x in ('minWorkingHours','maxWorkingHours')):continue
+                kept.append(row)
+            card['entities']=kept
+        for container in all_cards:
+            if isinstance(container.get('cards'),list):
+                container['cards'] = [c for c in container['cards'] if not (owned(c) and c.get('entities') == [])]
+    return config
 
 
 async def save_dashboard_backup(hass, url_path, config):
@@ -294,6 +353,7 @@ async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False, upd
         raise HomeAssistantError("Dashboard already contains a configuration; use update: true to preserve existing cards")
     if update and not empty:
         config = merge_dashboard(existing, config)
+    config = clean_generated_overview(config, hass)
     if config == existing:
         return
     if existing:

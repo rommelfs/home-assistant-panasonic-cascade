@@ -75,7 +75,7 @@ class HeatingCurveHATest(unittest.IsolatedAsyncioTestCase):
         c.data = {'point':row}; c.entry.runtime_data = c; c.write = AsyncMock(); add = Mock()
         await numbers.async_setup_entry(c.hass, c.entry, add)
         entity = list(add.call_args[0][0])[0]
-        self.assertIn('Zone 1 – Heizkurve – Min. Außentemperatur', entity.name)
+        self.assertIn('Zone 1 · Heizkurve · Min. Außentemperatur', entity.name)
         self.assertEqual(entity.native_value, -10)
         self.assertEqual((entity.native_min_value,entity.native_max_value), (-20,15))
         await entity.async_set_native_value(-12)
@@ -112,6 +112,6 @@ class HeatingCurveHATest(unittest.IsolatedAsyncioTestCase):
             await frontend.async_setup_frontend(hass)
             await frontend.async_setup_frontend(hass)
             hass.http.async_register_static_paths.assert_awaited_once()
-            add.assert_called_once_with(hass,'/panasonic_cascade/heating-curve.js?v=0.6.2')
+            add.assert_called_once_with(hass,frontend.CARD_URL+'?v=0.7.0')
         # Headless installations without the frontend still load core entities.
         await frontend.async_setup_frontend(SimpleNamespace(data={}))

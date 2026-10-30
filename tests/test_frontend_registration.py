@@ -33,7 +33,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             items=list(resources.async_items())
             self.assertEqual(len(items),2)
             self.assertIn(other,items)
-            self.assertEqual(next(i for i in items if i['id']!=other['id'])['url'],frontend.CARD_URL+'?v=0.6.2')
+            self.assertEqual(next(i for i in items if i['id']!=other['id'])['url'],frontend.CARD_URL+'?v=0.7.0')
             self.assertEqual(next(i for i in items if i['id']!=other['id'])['type'],'module')
             hass.http.async_register_static_paths.assert_awaited_once()
             add.assert_called_once()
@@ -67,3 +67,36 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
              patch.object(integration,'async_register_dashboard_service'):
             await integration.async_setup_entry(hass,entry)
         self.assertEqual(order,['frontend','refresh','platforms'])
+
+    async def test_http_file_is_served_before_frontend_ready_and_registration_retries_at_started(self):
+        from aiohttp.test_utils import TestClient, TestServer
+        from homeassistant.components.http.server import HomeAssistantHTTP
+        from homeassistant.helpers.http import KEY_ALLOW_CONFIGURED_CORS
+        from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+        from homeassistant.core import CoreState
+        with tempfile.TemporaryDirectory() as directory:
+            hass=HomeAssistant(directory)
+            hass.http=HomeAssistantHTTP(hass,None,None,None,['127.0.0.1'],0,[],'modern')
+            hass.http.app[KEY_ALLOW_CONFIGURED_CORS]=lambda resource:None
+            # No frontend URL manager yet: the previous implementation returned before registering HTTP.
+            await frontend.async_setup_frontend(hass)
+            client=TestClient(TestServer(hass.http.app))
+            await client.start_server()
+            try:
+                for path in (frontend.LEGACY_CARD_URL+'?v=0.6.2',frontend.CARD_URL+'?v=0.7.0'):
+                    response=await client.get(path)
+                    self.assertEqual(response.status,200)
+                    self.assertIn('javascript',response.headers['Content-Type'])
+                    self.assertIn("customElements.define('panasonic-cascade-heating-curve'",await response.text())
+                resources=ResourceStorageCollection(hass,SimpleNamespace(async_load=AsyncMock(return_value={})))
+                hass.data[LOVELACE_DATA]=SimpleNamespace(resources=resources)
+                hass.data[frontend.frontend.DATA_EXTRA_MODULE_URL]=Mock()
+                with patch.object(frontend.frontend,'add_extra_js_url') as add:
+                    hass.state=CoreState.running
+                    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+                    await hass.async_block_till_done()
+                    add.assert_called_once_with(hass,frontend.CARD_URL+'?v=0.7.0')
+                self.assertEqual(len(list(resources.async_items())),1)
+            finally:
+                await client.close()
+                await hass.async_stop()

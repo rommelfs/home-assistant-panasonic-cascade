@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.7.0](docs/releases/v0.7.0.md)
+
+Absolute daily observed start counts from Recorder, compact default labels, reduced duplicate curve controls/runtime diagnostics, and removal of legacy unknown Site Info counters from energy overview cards. Fix HTTP delivery when frontend startup is late and use a versioned curve module filename. Added actual HTTP/startup and WebKit checks.
+
 ## [0.6.2](docs/releases/v0.6.2.md)
 
 Fix binary sensor platform initialization (`row` NameError) so running-state entities can load for native on/off timelines. Register the heating-curve module early and persist/migrate dashboard resources to address missing custom-element errors. Existing cards and entity IDs are retained.

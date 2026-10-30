@@ -3,6 +3,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, CONFIG_FIELDS
+from .labels import compact_label
 from .model import name, invalid_temperature, model_key, POINT_LABELS
 from .zinc import reference
 
@@ -30,12 +31,13 @@ class CascadeEntity(CoordinatorEntity):
         self._attr_name = name(row) + (f" – {FIELD_NAMES.get(field, field)}" if field != "curVal" else "")
         if model_key(row) in POINT_LABELS and reference(row.get("heatPumpRef")) in coordinator.data:
             self._attr_name = name(coordinator.data[reference(row["heatPumpRef"])]) + " – " + self._attr_name
+        self._attr_name = compact_label(self._attr_name)
         self._attr_has_entity_name = False
         site = coordinator.entry.data["site_id"]
         parent = reference(row.get("equipRef")) or (ident if row.get("heatPumpModelId") or row.get("equip") else site)
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, f"{coordinator.entry.unique_id}|{parent}")},
-            name=name(coordinator.data.get(parent, {})) if parent in coordinator.data else coordinator.entry.title,
+            name=compact_label(name(coordinator.data.get(parent, {}))) if parent in coordinator.data else coordinator.entry.title,
             manufacturer="Panasonic", model="Cascade Control / Smart Edge",
             configuration_url=coordinator.client.url + f"/pod/panCascadeControlExt/index.html#/proj/{coordinator.client.project}/plantOverview",
         )

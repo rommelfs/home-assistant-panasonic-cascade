@@ -61,7 +61,7 @@ class DhwTest(unittest.IsolatedAsyncioTestCase):
             c.data = filtered
             entry = SimpleNamespace(options={'enable_controls':True}, runtime_data=c)
             added = Mock()
-            with patch.object(module, 'Cascade'+{'sensor':'Sensor','binary_sensor':'BinarySensor','switch':'Switch','number':'Number','select':'Select'}[domain], side_effect=lambda *args: args):
+            with patch.object(module, 'Cascade'+{'sensor':'Sensor','binary_sensor':'BinarySensor','switch':'Switch','number':'Number','select':'Select'}[domain], side_effect=lambda *args: args), patch.object(module, 'CascadeDailyStartsSensor', side_effect=lambda *args: args, create=True):
                 await module.async_setup_entry(Mock(), entry, added)
             if added.called:
                 for args in added.call_args.args[0]:

@@ -1,10 +1,14 @@
 """Expose numeric and text points plus equipment mode and counters."""
+from datetime import timedelta
 from homeassistant.helpers.entity import EntityCategory
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 
 from .const import COUNT_FIELDS, CONFIG_FIELDS
 from .entity import CascadeEntity
+from .runtime import CascadeDailyStartsSensor
+
+SCAN_INTERVAL = timedelta(seconds=60)
 from .model import state, unit, model_key
 from .zinc import MARKER, Number, value
 
@@ -29,6 +33,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
             for field in ("mode", *COUNT_FIELDS, *CONFIG_FIELDS):
                 if row.get(field) is not None:
                     entities.append(CascadeSensor(coordinator, ident, field))
+        if model_key(row) == "heatPump" and "isRunning" in row:
+            entities.append(CascadeDailyStartsSensor(coordinator, ident))
     async_add_entities(entities)
 
 
