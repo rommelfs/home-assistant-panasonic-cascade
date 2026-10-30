@@ -82,6 +82,10 @@ class DashboardPolishTest(unittest.TestCase):
         self.assertEqual(result['views'][0]['cards'][0]['hours_to_show'],48)
         self.assertNotIn('sensor.mode_power',str(result))
         self.assertEqual(controls.dashboard.refresh_generated_cards(deepcopy(result),generated,registry),result)
+        custom_graph={'type':'history-graph','title':'Leistungsverlauf','hours_to_show':72,'entities':['sensor.my_solar_power']}
+        mixed={'views':[{'path':'overview','cards':[deepcopy(custom_graph)]}]}
+        merged=controls.dashboard.merge_dashboard(mixed,generated)
+        self.assertEqual(merged['views'][0]['cards'][0],custom_graph)
 
 class AutomaticPolishTest(unittest.IsolatedAsyncioTestCase):
     async def test_recognized_dashboard_is_backed_up_refreshed_once_and_preserves_custom_content(self):

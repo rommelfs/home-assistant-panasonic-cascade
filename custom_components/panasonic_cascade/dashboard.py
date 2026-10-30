@@ -307,6 +307,11 @@ def merge_dashboard(existing, generated):
             view = extra
         for new_card in new_view.get("cards", []):
             card = next((c for c in walk(view) if identity(c) == identity(new_card)), None)
+            if card is not None and isinstance(card.get('entities'),list) and isinstance(new_card.get('entities'),list):
+                old_ids = {entity_id(r) for r in card['entities']}
+                new_ids = {entity_id(r) for r in new_card['entities']}
+                if old_ids and new_ids and not old_ids.intersection(new_ids):
+                    card = None  # Same title alone does not make a custom graph integration-owned.
             if card is not None:
                 if new_card.get('type') == 'entity-filter' and card.get('type') in ('entities','entity-filter'):
                     # Preserve manually named rows and user options while refreshing the generated selection.
