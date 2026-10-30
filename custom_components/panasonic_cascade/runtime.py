@@ -63,6 +63,10 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
         if not source or DATA_INSTANCE not in self.hass.data:
             return
         recorder = get_instance(self.hass)
+        ready = getattr(recorder, 'async_db_ready', None)
+        if ready is not None and (not ready.done() or ready.cancelled() or not ready.result()):
+            self._details['reason'] = 'Recorder database not ready'
+            return
         if recorder.entity_filter is not None and not recorder.entity_filter(source):
             self._details['reason'] = 'Source excluded from Recorder'
             return

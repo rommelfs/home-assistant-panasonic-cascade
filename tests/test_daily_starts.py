@@ -71,3 +71,10 @@ class DailyStartsTest(unittest.IsolatedAsyncioTestCase):
         recorder=SimpleNamespace(entity_filter=lambda source:False,async_add_executor_job=AsyncMock())
         with patch.object(runtime.er,'async_get',return_value=Mock()),patch.object(runtime,'get_instance',return_value=recorder):await entity.async_update()
         self.assertFalse(entity.available);recorder.async_add_executor_job.assert_not_awaited()
+        recorder.entity_filter=None
+        recorder.async_db_ready=Mock()
+        recorder.async_db_ready.done.return_value=False
+        with patch.object(runtime.er,'async_get',return_value=Mock()),patch.object(runtime,'get_instance',return_value=recorder):await entity.async_update()
+        self.assertFalse(entity.available)
+        self.assertEqual(entity.extra_state_attributes['reason'],'Recorder database not ready')
+        recorder.async_add_executor_job.assert_not_awaited()
