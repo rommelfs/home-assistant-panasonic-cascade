@@ -231,8 +231,8 @@ def polish_dashboard(hass, config, registry=None):
         summaries = [r for r in rows if '|summary:' in uid(r) and any(':'+key+'|curVal' in uid(r) for key in ('consumedPower','generatedPower'))]
         # Per-unit summaries and the explicit plant totals replace duplicated mode registers.
         if summaries:
-            covered = {uid(r).split('|summary:',1)[0] for r in summaries}
-            return [r for r in rows if r in summaries or uid(r).split('|',1)[0] not in covered]
+            covered = {records[r['entity']].config_entry_id for r in summaries}
+            return [r for r in rows if r in summaries or records[r['entity']].config_entry_id not in covered]
         return rows
     for view in config.get('views',[]):
         for card in view.get('cards',[]):

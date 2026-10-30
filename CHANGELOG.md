@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.8.1](docs/releases/v0.8.1.md)
+
+Fix duplicate-power selection with multipart installation IDs found during live verification. Use a fresh per-boot module URL to recover cached early import failures. Attempt dashboard upgrades shortly after Cascade platforms load instead of waiting solely for unrelated integrations to finish starting.
+
 ## [0.8.0](docs/releases/v0.8.0.md)
 
 Refresh generated live cards with short labels, dynamic unknown/unavailable filtering and canonical power readings. Add instantaneous COP, a Momentanverbrauch card in Energy, and outdoor temperature to power history. Safely upgrade recognized existing dashboards and use a fresh heating-curve module URL after confirming a cached import failure in the desktop client.

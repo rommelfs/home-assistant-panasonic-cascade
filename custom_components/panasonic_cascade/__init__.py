@@ -1,6 +1,7 @@
 """Panasonic Cascade / Smart Edge integration."""
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.start import async_at_started
+from homeassistant.helpers.event import async_call_later
 
 from .api import CascadeClient
 from .const import PLATFORMS
@@ -22,6 +23,10 @@ async def async_setup_entry(hass, entry):
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_register_dashboard_service(hass)
     entry.async_on_unload(async_at_started(hass, async_refresh_starts_tables))
+    async def refresh_dashboard(_):
+        await async_refresh_starts_tables(hass)
+    # Unrelated slow integrations must not hold dashboard upgrades until HA_STARTED.
+    entry.async_on_unload(async_call_later(hass, 15, refresh_dashboard))
     if entry.options.get("alarm_notify_service"):
         monitor = AlarmMonitor(hass, entry, coordinator)
         coordinator.alarm_monitor = monitor

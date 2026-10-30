@@ -5,8 +5,12 @@ const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
 (async () => {
+  let lateReady = false;
   const server = http.createServer((req, res) => {
-    const js = req.url === '/heating-curve.js';
+    if (req.url === '/empty') { res.setHeader('Content-Type','text/html'); res.end('<!doctype html><body></body>'); return; }
+    const late = req.url.startsWith('/late-card.js?');
+    if (late && !lateReady) { res.writeHead(404); res.end('Not ready'); return; }
+    const js = req.url === '/heating-curve.js' || late;
     res.setHeader('Content-Type', js ? 'text/javascript' : 'text/html');
     res.end(fs.readFileSync(js ? path.join(__dirname, '../../custom_components/panasonic_cascade/www/heating-curve.js') : path.join(__dirname, 'fixture.html')));
   });
@@ -14,6 +18,18 @@ const assert = require('node:assert/strict');
   let browser;
   try {
     browser = await (process.env.BROWSER_ENGINE === 'webkit' ? webkit : chromium).launch({headless: true});
+    const recovery = await browser.newPage();
+    await recovery.goto(`http://127.0.0.1:${server.address().port}/empty`);
+    assert.equal(await recovery.evaluate(async () => {
+      try { await import('/late-card.js?boot=before'); return false; } catch (_) { return true; }
+    }), true);
+    lateReady = true;
+    assert.equal(await recovery.evaluate(async () => {
+      await import('/late-card.js?boot=after');
+      return !!customElements.get('panasonic-cascade-heating-curve');
+    }), true);
+    await recovery.close();
+    console.log('Fresh boot resource recovers after initial HTTP 404');
     const page = await browser.newPage({viewport: {width:900,height:1000}});
     page.on('pageerror', error => { console.error(error); process.exitCode = 1; });
     await page.goto(`http://127.0.0.1:${server.address().port}`);

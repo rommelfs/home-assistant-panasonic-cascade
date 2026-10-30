@@ -43,7 +43,7 @@ class DashboardPolishTest(unittest.TestCase):
         hass,registry,devices=controls.DashboardTest().fixture()
         base=registry.entities['sensor.power']
         def add(ident,label,unit,unique):
-            registry.entities[ident]=SimpleNamespace(**{**vars(base),'entity_id':ident,'original_name':label,'unit_of_measurement':unit,'unique_id':'installation|'+unique})
+            registry.entities[ident]=SimpleNamespace(**{**vars(base),'entity_id':ident,'original_name':label,'unit_of_measurement':unit,'unique_id':'https://example.invalid|project|site|'+unique})
         add('sensor.total_power','Consumed electrical power','kW','summary:consumedPower|curVal')
         add('sensor.wp_power','HP 01 - Main – Elektrische Leistung','kW','summary:unit:hp:consumedPower|curVal')
         add('sensor.mode_power','HP 01 - Main – Heizen – Elektrische Leistung','W','mode|curVal')

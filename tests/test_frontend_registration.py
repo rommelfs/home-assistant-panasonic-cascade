@@ -33,7 +33,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             items=list(resources.async_items())
             self.assertEqual(len(items),2)
             self.assertIn(other,items)
-            self.assertEqual(next(i for i in items if i['id']!=other['id'])['url'],frontend.CARD_URL+'?v=0.8.0')
+            self.assertEqual(next(i for i in items if i['id']!=other['id'])['url'],frontend.module_url(hass))
             self.assertEqual(next(i for i in items if i['id']!=other['id'])['type'],'module')
             hass.http.async_register_static_paths.assert_awaited_once()
             add.assert_called_once()
@@ -64,9 +64,13 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
              patch.object(integration,'async_get_clientsession'),patch.object(integration,'CascadeClient'), \
              patch.object(integration,'CascadeCoordinator',return_value=coordinator), \
              patch.object(integration,'async_apply_dhw_visibility',new=AsyncMock()), \
-             patch.object(integration,'async_register_dashboard_service'):
+             patch.object(integration,'async_register_dashboard_service'),patch.object(integration,'async_call_later') as later, \
+             patch.object(integration,'async_refresh_starts_tables',new=AsyncMock()) as refresh:
             await integration.async_setup_entry(hass,entry)
+            await later.call_args.args[2](None)
         self.assertEqual(order,['frontend','refresh','platforms'])
+        self.assertEqual(later.call_args.args[1],15)
+        refresh.assert_awaited_once_with(hass)
 
     async def test_http_file_is_served_before_frontend_ready_and_registration_retries_at_started(self):
         from aiohttp.test_utils import TestClient, TestServer
@@ -83,7 +87,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
             client=TestClient(TestServer(hass.http.app))
             await client.start_server()
             try:
-                for path in (frontend.LEGACY_CARD_URL+'?v=0.6.2',frontend.CARD_URL+'?v=0.8.0'):
+                for path in (frontend.LEGACY_CARD_URL+'?v=0.6.2',frontend.module_url(hass)):
                     response=await client.get(path)
                     self.assertEqual(response.status,200)
                     self.assertIn('javascript',response.headers['Content-Type'])
@@ -95,8 +99,18 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
                     hass.state=CoreState.running
                     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
                     await hass.async_block_till_done()
-                    add.assert_called_once_with(hass,frontend.CARD_URL+'?v=0.8.0')
+                    add.assert_called_once_with(hass,frontend.module_url(hass))
                 self.assertEqual(len(list(resources.async_items())),1)
             finally:
                 await client.close()
                 await hass.async_stop()
+
+
+@unittest.skipIf(frontend is None,'Home Assistant required')
+class BootResourceTest(unittest.TestCase):
+    def test_cache_key_is_stable_within_boot_and_changes_after_restart(self):
+        first=SimpleNamespace(data={}); second=SimpleNamespace(data={})
+        url=frontend.module_url(first)
+        self.assertEqual(url,frontend.module_url(first))
+        self.assertNotEqual(url,frontend.module_url(second))
+        self.assertIn('boot=',url)

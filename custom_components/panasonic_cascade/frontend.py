@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import re
+from secrets import token_hex
 from pathlib import Path
 
 from homeassistant.components import frontend
@@ -15,9 +16,17 @@ from homeassistant.helpers.start import async_at_started
 from .const import DOMAIN
 
 LEGACY_CARD_URL = '/panasonic_cascade/heating-curve.js'
-CARD_URL = '/panasonic_cascade/heating-curve-0.8.0.js'
-CARD_VERSION = '0.8.0'
+CARD_URL = '/panasonic_cascade/heating-curve-0.8.1.js'
+CARD_VERSION = '0.8.1'
 LOGGER = logging.getLogger(__name__)
+
+
+def module_url(hass):
+    """A fresh URL after each HA boot recovers clients that imported before HTTP was ready."""
+    key = f'{DOMAIN}_frontend_boot'
+    if key not in hass.data:
+        hass.data[key] = token_hex(8)
+    return f'{CARD_URL}?v={CARD_VERSION}&boot={hass.data[key]}'
 
 
 async def async_setup_frontend(hass):
@@ -28,12 +37,13 @@ async def async_setup_frontend(hass):
         if not hass.data.get(f'{DOMAIN}_frontend_ready'):
             await hass.http.async_register_static_paths([
                 StaticPathConfig(CARD_URL, str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),
+                StaticPathConfig('/panasonic_cascade/heating-curve-0.8.0.js', str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),
                 StaticPathConfig('/panasonic_cascade/heating-curve-0.7.0.js', str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),
                 StaticPathConfig(LEGACY_CARD_URL, str(Path(__file__).parent / 'www' / 'heating-curve.js'), False)
             ])
             hass.data[f'{DOMAIN}_frontend_ready'] = True
         if frontend.DATA_EXTRA_MODULE_URL in hass.data and not hass.data.get(f'{DOMAIN}_frontend_module'):
-            frontend.add_extra_js_url(hass, f'{CARD_URL}?v={CARD_VERSION}')
+            frontend.add_extra_js_url(hass, module_url(hass))
             hass.data[f'{DOMAIN}_frontend_module'] = True
         lovelace = hass.data.get(LOVELACE_DATA)
         resources = getattr(lovelace, 'resources', None)
@@ -42,7 +52,7 @@ async def async_setup_frontend(hass):
                 await resources.async_get_info()  # Public API loads the collection from storage.
                 matches = [item for item in resources.async_items()
                            if re.fullmatch(r'/panasonic_cascade/heating-curve(?:-[0-9.]+)?\.js', item.get('url', '').split('?')[0])]
-                resource = {'url':f'{CARD_URL}?v={CARD_VERSION}', 'res_type':'module'}
+                resource = {'url':module_url(hass), 'res_type':'module'}
                 if not matches:
                     await resources.async_create_item(resource)
                 else:
