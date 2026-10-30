@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.9.0](docs/releases/v0.9.0.md)
+
+Use context-aware field labels and display-only rounding, separate additional settings from the overview, and consolidate read-only detail groups. Stop treating equipment operating enable as compressor cycling. Without a verified compressor-running signal, counters are unavailable with an explanation; no power-based estimation is used.
+
 ## [0.8.1](docs/releases/v0.8.1.md)
 
 Fix duplicate-power selection with multipart installation IDs found during live verification. Use a fresh per-boot module URL to recover cached early import failures. Attempt dashboard upgrades shortly after Cascade platforms load instead of waiting solely for unrelated integrations to finish starting.

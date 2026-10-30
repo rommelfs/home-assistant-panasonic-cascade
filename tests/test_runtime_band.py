@@ -33,7 +33,7 @@ class RuntimeBandTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(entities),6)
         first = entities['installation|pump1|isRunning']
         second = entities['installation|pump2|isRunning']
-        self.assertIs(first.device_class,BinarySensorDeviceClass.RUNNING)
+        self.assertIsNone(first.device_class)
         self.assertIs(first.is_on,True)
         self.assertIs(second.is_on,False)
         self.assertIs(entities['installation|fault|curVal'].device_class,BinarySensorDeviceClass.PROBLEM)
@@ -52,7 +52,7 @@ class RuntimeBandTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(controls.dashboard.er,'async_get',return_value=registry),patch.object(controls.dashboard.dr,'async_get',return_value=devices):
             config = controls.dashboard.build_dashboard(hass)
         runtime = next(v for v in config['views'] if v['path']=='runtime')
-        band = next(c for c in runtime['cards'] if c.get('title')=='Betrieb und Taktung – 24 Stunden')
+        band = next(c for c in runtime['cards'] if c.get('title')=='Betriebsfreigabe – 24 Stunden')
         self.assertEqual(band['type'],'history-graph')
         self.assertEqual(band['hours_to_show'],24)
         self.assertEqual([r['entity'] for r in band['entities']],

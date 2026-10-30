@@ -27,7 +27,7 @@ class CascadeBinarySensor(CascadeEntity, BinarySensorEntity):
         elif field == "isConnected":
             self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
         elif field == "isRunning":
-            self._attr_device_class = BinarySensorDeviceClass.RUNNING
+            self._attr_icon = 'mdi:check-circle-outline'
 
     @property
     def is_on(self):

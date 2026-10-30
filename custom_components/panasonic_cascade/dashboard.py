@@ -13,7 +13,7 @@ from homeassistant.helpers.storage import Store
 
 from .const import DOMAIN
 from .model import name, model_key
-from .labels import compact_label
+from .labels import compact_label, display_label
 from .zinc import reference
 
 SERVICE = "populate_dashboard"
@@ -63,15 +63,19 @@ def heating_curve_cards(entries, entities):
 def starts_table(entities):
     """Native Markdown table: explicit absolute counts for today and the past six days."""
     sources = [row['entity'] for row in entities]
-    headers = ["{{ state_attr('" + source + "', 'friendly_name') | default('WP', true) | replace(' · Starts heute','') | replace('|','/') | replace('\\n',' ') }}" for source in sources]
+    headers = ["{{ state_attr('" + source + "', 'friendly_name') | default('WP', true) | replace(' · Starts heute','') | replace(' · Verdichterstarts heute','') | replace('|','/') | replace('\\n',' ') }}" for source in sources]
     content = TABLE_MARKER + "\n{% set pumps = " + repr(sources) + " %}\n"
+    content += "{% set ns = namespace(usable=false) %}{% for source in pumps %}{% for day in state_attr(source, 'daily_starts') or [] %}{% if day.starts is not none %}{% set ns.usable = true %}{% endif %}{% endfor %}{% endfor %}\n{% if ns.usable %}\n"
     content += "| Tag | " + " | ".join(headers) + " |\n|---|" + "---:|" * len(sources) + "\n"
     content += """{% for offset in range(7) -%}
 {% set date = (now().date() - timedelta(days=offset)) | string -%}
 | {{ 'Heute' if offset == 0 else 'Gestern' if offset == 1 else (now() - timedelta(days=offset)).strftime('%d.%m.%Y') }} |{% for source in pumps %}{% set item = (state_attr(source, 'daily_starts') or []) | selectattr('date', 'eq', date) | first | default(none) %} {{ item.starts if item and item.starts is not none else '—' }}{{ '*' if item and item.starts is not none and item.partial else '' }} |{% endfor %}
 {% endfor %}
 
-Einschaltungen = erfasste Aus→Ein-Wechsel. **—**: keine auswertbaren Daten. Sternchen: Erfassung unvollständig; Wert ist eine Mindestzahl.
+Verdichterstarts = bestätigte Aus→Ein-Wechsel. **—**: keine auswertbaren Daten. Sternchen: Erfassung unvollständig; Wert ist eine Mindestzahl.
+{% else %}
+**Verdichtertaktung nicht verfügbar.** Der Regler liefert keinen bestätigten Verdichterstatus. „In Betrieb“/„Betriebsfreigabe“ wird nicht als Verdichterlauf gezählt. Keine Schätzung aus der Leistung.
+{% endif %}
 """
     return {"type":"markdown", "title":"Einschaltungen pro Tag", "content":content}
 
@@ -97,6 +101,8 @@ def build_dashboard(hass, entry_id=None):
             point_models.update({f"{entry.unique_id}|{ident}|curVal":model_key(row) for ident,row in data.items()})
     for entity in entities:
         label = entity.name or compact_label(name({"dis": entity.original_name or entity.entity_id}))
+        if entity.unique_id.endswith("|isRunning") and not entity.name:
+            label = label.replace(" · In Betrieb", " · Betriebsfreigabe").replace(" – In Betrieb", " · Betriebsfreigabe")
         row = {"entity": entity.entity_id, "name": label}
         device = devices.devices.get(entity.device_id)
         group = device.name_by_user or device.name if device else "Anlage"
@@ -174,7 +180,7 @@ def build_dashboard(hass, entry_id=None):
         if operating:
             runtime_cards.extend([
                 {"type":"entities", "title":"Wärmepumpen – Betriebszustand", "show_header_toggle":False, "entities":operating},
-                {"type":"history-graph", "title":"Betrieb und Taktung – 24 Stunden", "hours_to_show":24, "entities":operating},
+                {"type":"history-graph", "title":"Betriebsfreigabe – 24 Stunden", "hours_to_show":24, "entities":operating},
             ])
         if hours:
             runtime_cards.extend([
@@ -258,6 +264,29 @@ def polish_dashboard(hass, config, registry=None):
                 temperatures = next((c['entities'] for c in overview.get('cards',[]) if c.get('title')=='Aktuelle Temperaturen'),[])
                 outside = [r for r in temperatures if any(t in r.get('name','').casefold() for t in ('aussen','outdoor air temperature'))]
                 card['entities'] += [deepcopy(r) for r in outside if r not in card['entities']]
+    overview = next((v for v in config['views'] if v.get('path')=='overview'),{})
+    control_card = next((c for c in overview.get('cards',[]) if c.get('title')=='Steuerung'),None)
+    if control_card:
+        basic,advanced=[],[]
+        for row in control_card['entities']:
+            entity=records[row['entity']]
+            label=row.get('name','').casefold()
+            (basic if entity.unique_id.endswith('|zone1_control') or
+                (entity.domain=='select' and any(t in label for t in ('betriebsart','mode','leisemodus'))) else advanced).append(row)
+        control_card['entities']=basic
+        if advanced:
+            config['views'].append({'title':'Einstellungen','path':'settings','icon':'mdi:tune','cards':[
+                {'type':'entities','title':'Weitere Vorgaben','show_header_toggle':False,'entities':advanced}]})
+    for view in config['views']:
+        for card in view.get('cards',[]):
+            if view.get('path')=='details' and isinstance(card.get('entities'),list):
+                card['entities']=[r for r in card['entities'] if records[r['entity']].domain not in ('number','select','switch')]
+                card['title']=display_label(card.get('title',''))
+            if isinstance(card.get('entities'),list):
+                for row in card['entities']:
+                    if isinstance(row,dict):
+                        row['name']=display_label(row.get('name',row['entity']),card.get('title',''))
+        view['cards']=[c for c in view.get('cards',[]) if c.get('entities') != []]
     # Native filtering updates on state changes, so recovering sensors reappear automatically.
     for view in config.get('views',[]):
         for index,card in enumerate(view.get('cards',[])):
@@ -265,6 +294,8 @@ def polish_dashboard(hass, config, registry=None):
                 view['cards'][index] = {'type':'entity-filter','title':card.get('title'),
                     'entities':card['entities'], 'conditions':[{'condition':'state','state_not':['unknown','unavailable']}],
                     'show_empty':False,'card':{k:v for k,v in card.items() if k!='entities'}}
+    for view in config['views']:
+        if view.get('path')=='details':compact_details_view(view,registry)
     return config
 
 
@@ -324,7 +355,7 @@ def merge_dashboard(existing, generated):
                         old = old_rows.get(row['entity'])
                         if old and old.get('name') and compact_label(old['name']) != row.get('name'):
                             # Old controller labels may have changed to localized names; compare registry below.
-                            if not any(token in old['name'] for token in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve')):
+                            if not any(token in old['name'] for token in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve',' · In Betrieb',' – In Betrieb','Standardwert','Vorgabe')):
                                 row.update(old)
                     if card.get('type') == 'entities':
                         replacement['card'].update({k:v for k,v in card.items() if k not in ('type','title','entities')})
@@ -395,6 +426,31 @@ def clean_generated_overview(config, hass):
     return config
 
 
+def compact_details_view(view, registry):
+    """Consolidate generated equipment groups; controls belong to their own views."""
+    grouped, cards = {}, []
+    for card in view.get('cards',[]):
+        rows=card.get('entities')
+        ids=[r if isinstance(r,str) else r.get('entity') for r in rows] if isinstance(rows,list) else []
+        if card.get('type') not in ('entities','entity-filter') or not ids or not all(i in registry.entities and registry.entities[i].platform==DOMAIN for i in ids):
+            cards.append(card);continue
+        title=display_label(card.get('title','Anlage'))
+        rows=[r for r in rows if registry.entities[r if isinstance(r,str) else r['entity']].domain not in ('switch','select','number')]
+        if not rows:continue
+        for row in rows:
+            if isinstance(row,dict):row['name']=display_label(row.get('name',row['entity']),title)
+        if title not in grouped:
+            owned=deepcopy(card)
+            owned.update({'type':'entity-filter','title':title,'entities':[],
+                'conditions':[{'condition':'state','state_not':['unknown','unavailable']}],
+                'show_empty':False,'card':{'type':'entities','title':title,'show_header_toggle':False}})
+            grouped[title]=owned;cards.append(owned)
+        present={r if isinstance(r,str) else r['entity'] for r in grouped[title]['entities']}
+        grouped[title]['entities'] += [r for r in rows if (r if isinstance(r,str) else r['entity']) not in present]
+    view['cards']=cards
+    return view
+
+
 def refresh_generated_cards(config, generated, registry):
     """Refresh recognized default cards only; preserve layout, custom cards and graph ranges."""
     def walk(container):
@@ -403,6 +459,7 @@ def refresh_generated_cards(config, generated, registry):
             for child in container.get(key,[]):
                 if isinstance(child,dict):yield from walk(child)
     for view in config.get('views',[]):
+        if view.get('path')=='details':compact_details_view(view,registry)
         source = next((v for v in generated.get('views',[]) if v.get('path')==view.get('path')),None)
         if not source:continue
         defaults = {c.get('title'):c for c in source.get('cards',[]) if c.get('title')}
@@ -411,6 +468,8 @@ def refresh_generated_cards(config, generated, registry):
             if not isinstance(rows,list):continue
             ids = [r if isinstance(r,str) else r.get('entity') for r in rows if isinstance(r,(str,dict))]
             if not ids or not all(registry.entities.get(i) and registry.entities[i].platform==DOMAIN for i in ids):continue
+            if card.get('type')=='history-graph' and card.get('title')=='Betrieb und Taktung – 24 Stunden' and all(registry.entities[i].unique_id.endswith('|isRunning') for i in ids):
+                card['title']='Betriebsfreigabe – 24 Stunden'
             new = defaults.get(card.get('title'))
             if new and isinstance(new.get('entities'),list):
                 new_owners = {registry.entities[i].config_entry_id for r in new['entities'] if (i := r if isinstance(r,str) else r.get('entity')) in registry.entities}
@@ -427,14 +486,14 @@ def refresh_generated_cards(config, generated, registry):
                     for row in card['entities']:
                         prior=old.get(row['entity'],{})
                         original=registry.entities[row['entity']].original_name or ''
-                        if prior.get('name') and compact_label(prior['name']) != compact_label(original) and not any(t in prior['name'] for t in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve')):
+                        if prior.get('name') and display_label(prior['name'],card.get('title','')) != display_label(original,card.get('title','')) and not any(t in prior['name'] for t in ('HP 0','Point Group','Site Info','Zone Group','Heizkurve',' · In Betrieb',' – In Betrieb','Standardwert','Vorgabe')):
                             row.update(prior)
             else:
                 for row in rows:
                     if isinstance(row,dict):
                         entry=registry.entities[row['entity']]
                         if not entry.name and (not row.get('name') or compact_label(row['name'])==compact_label(entry.original_name or '')):
-                            row['name']=compact_label(entry.original_name or row['entity'])
+                            row['name']=display_label(entry.original_name or row['entity'],card.get('title',''))
     return config
 
 
@@ -476,7 +535,7 @@ async def async_refresh_starts_tables(hass):
                     if view.get('path') != 'runtime' or view.get('type') == 'panel' or view.get('panel'):continue
                     cards = list(walk(view))
                     sources = {r if isinstance(r,str) else r.get('entity') for c in cards
-                               if c.get('type') == 'history-graph' and c.get('title') == 'Betrieb und Taktung – 24 Stunden'
+                               if c.get('type') == 'history-graph' and c.get('title') in ('Betrieb und Taktung – 24 Stunden','Betriebsfreigabe – 24 Stunden')
                                for r in c.get('entities',[]) if isinstance(r,(str,dict))}
                     selected = [e for e in counters if running.get((e.config_entry_id,e.unique_id[:-len('starts_today')]+'isRunning')) in sources]
                     if not selected:continue

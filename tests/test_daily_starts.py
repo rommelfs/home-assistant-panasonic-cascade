@@ -51,30 +51,38 @@ class DailyStartsTest(unittest.IsolatedAsyncioTestCase):
         entity=self.entity();source='binary_sensor.my_renamed_pump'
         recorder=SimpleNamespace(entity_filter=None,async_add_executor_job=AsyncMock(return_value={source:self.states([(-5,'off'),(5,'on'),(10,'off'),(15,'on')])}))
         registry=Mock();registry.async_get_entity_id.return_value=source
-        with patch.object(runtime.er,'async_get',return_value=registry),patch.object(runtime,'get_instance',return_value=recorder), \
+        with patch.object(runtime,'verified_compressor_source',return_value=source),patch.object(runtime.er,'async_get',return_value=registry),patch.object(runtime,'get_instance',return_value=recorder), \
              patch.object(runtime.dt_util,'now',return_value=self.start+timedelta(hours=10)), \
              patch.object(runtime.dt_util,'start_of_local_day',side_effect=lambda day:datetime(day.year,day.month,day.day,tzinfo=UTC)):
             await entity.async_update();self.assertEqual(entity.native_value,2)
             await entity.async_update();self.assertEqual(entity.native_value,2)
         self.assertEqual(entity.unique_id,'installation|hp|starts_today')
-        self.assertEqual(entity.name,'WP 1 · Starts heute')
+        self.assertEqual(entity.name,'WP 1 · Verdichterstarts heute')
         self.assertTrue(entity.should_poll)
         self.assertFalse(entity.extra_state_attributes['partial_day'])
         query=recorder.async_add_executor_job.call_args.args[0]
         self.assertEqual(query.keywords['entity_id'],source)
     async def test_missing_and_excluded_recorder_produce_unavailable_not_zero(self):
         entity=self.entity();entity.hass.data={}
-        with patch.object(runtime.er,'async_get',return_value=Mock()):await entity.async_update()
+        with patch.object(runtime,'verified_compressor_source',return_value='binary_sensor.verified'),patch.object(runtime.er,'async_get',return_value=Mock()):await entity.async_update()
         self.assertFalse(entity.available)
         self.assertIsNone(entity.native_value)
         entity.hass.data={runtime.DATA_INSTANCE:object()}
         recorder=SimpleNamespace(entity_filter=lambda source:False,async_add_executor_job=AsyncMock())
-        with patch.object(runtime.er,'async_get',return_value=Mock()),patch.object(runtime,'get_instance',return_value=recorder):await entity.async_update()
+        with patch.object(runtime,'verified_compressor_source',return_value='binary_sensor.verified'),patch.object(runtime.er,'async_get',return_value=Mock()),patch.object(runtime,'get_instance',return_value=recorder):await entity.async_update()
         self.assertFalse(entity.available);recorder.async_add_executor_job.assert_not_awaited()
         recorder.entity_filter=None
         recorder.async_db_ready=Mock()
         recorder.async_db_ready.done.return_value=False
-        with patch.object(runtime.er,'async_get',return_value=Mock()),patch.object(runtime,'get_instance',return_value=recorder):await entity.async_update()
+        with patch.object(runtime,'verified_compressor_source',return_value='binary_sensor.verified'),patch.object(runtime.er,'async_get',return_value=Mock()),patch.object(runtime,'get_instance',return_value=recorder):await entity.async_update()
         self.assertFalse(entity.available)
         self.assertEqual(entity.extra_state_attributes['reason'],'Recorder database not ready')
         recorder.async_add_executor_job.assert_not_awaited()
+
+    async def test_unit_enable_is_never_treated_as_confirmed_compressor_running(self):
+        entity=self.entity()
+        await entity.async_update()
+        self.assertIsNone(entity.native_value)
+        self.assertFalse(entity.available)
+        self.assertEqual(entity.extra_state_attributes['daily_starts'],[])
+        self.assertIn('No verified compressor',entity.extra_state_attributes['reason'])

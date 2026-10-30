@@ -11,7 +11,7 @@ FIELD_NAMES = {
     "mode": "Betriebsart", "runningUnitsAmount": "Laufende Geräte",
     "requiredUnitsAmount": "Angeforderte Geräte", "availableUnitsAmount": "Verfügbare Geräte",
     "configuredUnitsAmount": "Konfigurierte Geräte", "isConnected": "Verbunden",
-    "isOn": "Eingeschaltet", "isRunning": "In Betrieb", "isInAlarm": "Alarm",
+    "isOn": "Eingeschaltet", "isRunning": "Betriebsfreigabe", "isInAlarm": "Alarm",
     "isAvailableBuffer": "Puffer verfügbar", "isAvailableTank": "Warmwasser verfügbar",
     "run": "In Betrieb", "isEnabled": "Aktiviert", "isRunningBuffer": "Heizpuffer in Betrieb",
     "isRunningTank": "Warmwasser in Betrieb", "runRequestBuffer": "Heizanforderung",

@@ -36,7 +36,7 @@ class CompactDashboardTest(unittest.TestCase):
         self.assertNotIn('sensor.floor_site_info_energy',str(energy))
         details=next(v for v in config['views'] if v['path']=='details')
         self.assertIn('sensor.floor_site_info_energy',str(details))
-        self.assertIn('WP 1 · Heizen · Stromzähler',str(energy))
+        self.assertIn('WP 1 Heizen · Strom',str(energy))
         runtime=next(v for v in config['views'] if v['path']=='runtime')
         self.assertIn('sensor.hp_starts',str(runtime))
         self.assertIn('sensor.hp_hours',str(runtime))

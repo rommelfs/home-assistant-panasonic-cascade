@@ -14,10 +14,25 @@ from sqlalchemy.exc import SQLAlchemyError
 from .const import DOMAIN
 from .entity import CascadeEntity
 from .labels import compact_label
-from .model import name
+from .model import name, model_key
+from .zinc import reference
 
 LOGGER = logging.getLogger(__name__)
 HISTORY_DAYS = 7
+
+
+# No compressor-running point has been established in the captured controller API.
+# Add a model only after verifying its physical meaning; never infer it from power.
+VERIFIED_COMPRESSOR_STATUS_MODELS = frozenset()
+
+
+def verified_compressor_source(hass, coordinator, ident):
+    for point, row in coordinator.data.items():
+        if (model_key(row) in VERIFIED_COMPRESSOR_STATUS_MODELS and row.get('kind') == 'Bool'
+                and (reference(row.get('heatPumpRef')) or reference(row.get('equipRef'))) == ident):
+            return er.async_get(hass).async_get_entity_id('binary_sensor', DOMAIN,
+                f'{coordinator.entry.unique_id}|{point}|curVal')
+    return None
 
 
 def count_starts(states, start):
@@ -67,7 +82,7 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
 
     def __init__(self, coordinator, ident):
         super().__init__(coordinator, ident, 'starts_today')
-        self._attr_name = compact_label(name(self.row)) + ' · Starts heute'
+        self._attr_name = compact_label(name(self.row)) + ' · Verdichterstarts heute'
         self._count = None
         self._details = {}
 
@@ -79,12 +94,14 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
         self._count = None
         today = dt_util.now().date()
         start = dt_util.as_utc(dt_util.start_of_local_day(today - timedelta(days=HISTORY_DAYS - 1)))
-        source = er.async_get(self.hass).async_get_entity_id(
-            'binary_sensor', DOMAIN, f'{self.coordinator.entry.unique_id}|{self.ident}|isRunning')
+        source = verified_compressor_source(self.hass, self.coordinator, self.ident)
         self._details = {'day':str(today), 'source_entity':source, 'partial_day':True,
                          'daily_starts':[], 'history_days':HISTORY_DAYS,
-                         'counting':'Recorded off → on transitions per local calendar day; gaps are not inferred.'}
-        if not source or DATA_INSTANCE not in self.hass.data:
+                         'counting':'Confirmed compressor off → on transitions only; no power-based inference.'}
+        if not source:
+            self._details['reason'] = 'No verified compressor-running status; controller isRunning is operating enable only'
+            return
+        if DATA_INSTANCE not in self.hass.data:
             return
         recorder = get_instance(self.hass)
         ready = getattr(recorder, 'async_db_ready', None)

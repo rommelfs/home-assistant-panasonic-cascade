@@ -51,6 +51,10 @@ class CascadeSensor(CascadeEntity, SensorEntity):
             u = unit(row) if field == "curVal" else row[field].unit
             self._attr_native_unit_of_measurement = "%" if u == "%RH" else u or None
             self._attr_device_class = UNIT_CLASS.get(u)
+            self._attr_suggested_display_precision = {
+                '°C':1,'°F':1,'W':0,'kW':2,'Wh':0,'kWh':1,'h':0,'min':0,'s':0,
+                'Hz':0,'A':1,'V':0,'bar':2,'%':0,'%RH':0,
+            }.get(u,2)
             # Do not infer cumulative energy statistics from ambiguous energy tags.
             if self._attr_device_class == SensorDeviceClass.ENERGY:
                 if row.get("hisTotalized") is MARKER:
