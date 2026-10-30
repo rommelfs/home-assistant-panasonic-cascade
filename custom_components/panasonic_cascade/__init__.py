@@ -1,10 +1,11 @@
 """Panasonic Cascade / Smart Edge integration."""
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.start import async_at_started
 
 from .api import CascadeClient
 from .const import PLATFORMS
 from .coordinator import CascadeCoordinator
-from .dashboard import async_register_dashboard_service
+from .dashboard import async_register_dashboard_service, async_refresh_starts_tables
 from .visibility import async_apply_dhw_visibility
 from .notifications import AlarmMonitor
 from .frontend import async_setup_frontend
@@ -20,6 +21,7 @@ async def async_setup_entry(hass, entry):
     entry.runtime_data = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_register_dashboard_service(hass)
+    entry.async_on_unload(async_at_started(hass, async_refresh_starts_tables))
     if entry.options.get("alarm_notify_service"):
         monitor = AlarmMonitor(hass, entry, coordinator)
         coordinator.alarm_monitor = monitor

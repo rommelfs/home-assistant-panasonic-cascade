@@ -1,5 +1,6 @@
 """Read-only daily observed start counts, reconstructed from Recorder across restarts."""
 from functools import partial
+from datetime import timedelta
 import logging
 
 from homeassistant.components.recorder.history import state_changes_during_period
@@ -16,11 +17,12 @@ from .labels import compact_label
 from .model import name
 
 LOGGER = logging.getLogger(__name__)
+HISTORY_DAYS = 7
 
 
 def count_starts(states, start):
     """Count confirmed off->on changes; never count an initial/on-after-gap sample."""
-    if not states:
+    if not states or not any(s.state in ("on", "off") for s in states):
         return None, True
     previous = None
     partial_day = states[0].last_updated > start
@@ -34,6 +36,27 @@ def count_starts(states, start):
             count += 1
         previous = state.state
     return count, partial_day
+
+
+def daily_counts(states, today, days=HISTORY_DAYS):
+    """Partition one Recorder query into local calendar days, carrying only the prior state."""
+    ordered = sorted(states, key=lambda state: state.last_updated)
+    cursor, baseline, result = 0, None, []
+    for offset in reversed(range(days)):
+        day = today - timedelta(days=offset)
+        start = dt_util.as_utc(dt_util.start_of_local_day(day))
+        end = dt_util.as_utc(dt_util.start_of_local_day(day + timedelta(days=1)))
+        while cursor < len(ordered) and ordered[cursor].last_updated < start:
+            baseline = ordered[cursor]
+            cursor += 1
+        samples = [baseline] if baseline is not None else []
+        while cursor < len(ordered) and ordered[cursor].last_updated < end:
+            baseline = ordered[cursor]
+            samples.append(baseline)
+            cursor += 1
+        count, incomplete = count_starts(samples, start)
+        result.append({'date':str(day), 'starts':count, 'partial':incomplete})
+    return list(reversed(result))
 
 
 class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
@@ -55,11 +78,12 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
     async def async_update(self):
         self._count = None
         today = dt_util.now().date()
-        start = dt_util.as_utc(dt_util.start_of_local_day(today))
+        start = dt_util.as_utc(dt_util.start_of_local_day(today - timedelta(days=HISTORY_DAYS - 1)))
         source = er.async_get(self.hass).async_get_entity_id(
             'binary_sensor', DOMAIN, f'{self.coordinator.entry.unique_id}|{self.ident}|isRunning')
         self._details = {'day':str(today), 'source_entity':source, 'partial_day':True,
-                         'counting':'Recorded off → on transitions since local midnight; gaps are not inferred.'}
+                         'daily_starts':[], 'history_days':HISTORY_DAYS,
+                         'counting':'Recorded off → on transitions per local calendar day; gaps are not inferred.'}
         if not source or DATA_INSTANCE not in self.hass.data:
             return
         recorder = get_instance(self.hass)
@@ -79,10 +103,13 @@ class CascadeDailyStartsSensor(CascadeEntity, SensorEntity):
             return
         if dt_util.now().date() != today:
             return
-        self._count, self._details['partial_day'] = count_starts(history.get(source, []), start)
+        days = daily_counts(history.get(source, []), today)
+        self._details['daily_starts'] = days
+        self._count, self._details['partial_day'] = days[0]['starts'], days[0]['partial']
         current = self.hass.states.get(source)
         if not current or current.state not in ('on', 'off'):
             self._details['partial_day'] = True
+            days[0]['partial'] = True
 
     @property
     def should_poll(self):

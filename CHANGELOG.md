@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.7.1](docs/releases/v0.7.1.md)
+
+Display absolute observed start counts for today, yesterday and five earlier dates in a native dashboard table. Reconstruct seven local calendar days from Recorder and add the table automatically to recognized existing runtime views, with a backup and without replacing other cards. Missing history stays missing.
+
 ## [0.7.0](docs/releases/v0.7.0.md)
 
 Absolute daily observed start counts from Recorder, compact default labels, reduced duplicate curve controls/runtime diagnostics, and removal of legacy unknown Site Info counters from energy overview cards. Fix HTTP delivery when frontend startup is late and use a versioned curve module filename. Added actual HTTP/startup and WebKit checks.

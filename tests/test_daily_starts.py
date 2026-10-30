@@ -53,7 +53,7 @@ class DailyStartsTest(unittest.IsolatedAsyncioTestCase):
         registry=Mock();registry.async_get_entity_id.return_value=source
         with patch.object(runtime.er,'async_get',return_value=registry),patch.object(runtime,'get_instance',return_value=recorder), \
              patch.object(runtime.dt_util,'now',return_value=self.start+timedelta(hours=10)), \
-             patch.object(runtime.dt_util,'start_of_local_day',return_value=self.start):
+             patch.object(runtime.dt_util,'start_of_local_day',side_effect=lambda day:datetime(day.year,day.month,day.day,tzinfo=UTC)):
             await entity.async_update();self.assertEqual(entity.native_value,2)
             await entity.async_update();self.assertEqual(entity.native_value,2)
         self.assertEqual(entity.unique_id,'installation|hp|starts_today')

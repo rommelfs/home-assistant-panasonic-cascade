@@ -24,10 +24,10 @@ These are the models identified so far. Other models, controller software versio
 
 | Component | Version | Validation scope |
 | --- | --- | --- |
-| Integration baseline | **0.7.0** | Published prerelease used as the baseline for this compatibility record; the owner's installed integration version is not confirmed. |
+| Integration baseline | **0.7.1** | Automated validation baseline. The owner confirmed commit `9004feb` (0.7.0) installed before this update. |
 | Home Assistant Core | **2026.10.0** | Pinned development dependency; actual Home Assistant classes with a simulated controller backend. This does not establish a minimum supported Core version. |
 | Python | **3.14** (local run: **3.14.6**) | Local test environment; CI selects Python 3.14. |
-| Functional test suite | **110 passing Python tests**, plus frontend checks | Protocol, authentication, setup, entities, controls, dashboard storage, domestic-hot-water visibility, and alarm notifications to a local test receiver. |
+| Functional test suite | **116 passing Python tests**, plus frontend checks | Protocol, authentication, setup, entities, controls, dashboard storage, domestic-hot-water visibility, and alarm notifications to a local test receiver. |
 
 Hassfest and HACS validation also passed for the 0.5.2 release. Their CI actions track upstream branches; they are validation tools, not controller software versions. See the [validation workflow](../.github/workflows/validate.yml) and [development requirements](../requirements-dev.txt).
 

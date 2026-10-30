@@ -1,5 +1,6 @@
 """Build a native dashboard using the installed entity registry IDs."""
 import asyncio
+import logging
 from copy import deepcopy
 from datetime import UTC, datetime
 
@@ -16,6 +17,8 @@ from .labels import compact_label
 from .zinc import reference
 
 SERVICE = "populate_dashboard"
+LOGGER = logging.getLogger(__name__)
+TABLE_MARKER = "{# Panasonic Cascade daily-start table #}"
 
 
 CURVE_KEYS = {
@@ -55,6 +58,22 @@ def heating_curve_cards(entries, entities):
                 cards.append({"type": "custom:panasonic-cascade-heating-curve",
                               "title": "Zone 1 – Heizkurve", "entities": values})
     return cards
+
+
+def starts_table(entities):
+    """Native Markdown table: explicit absolute counts for today and the past six days."""
+    sources = [row['entity'] for row in entities]
+    headers = ["{{ state_attr('" + source + "', 'friendly_name') | default('WP', true) | replace(' · Starts heute','') | replace('|','/') | replace('\\n',' ') }}" for source in sources]
+    content = TABLE_MARKER + "\n{% set pumps = " + repr(sources) + " %}\n"
+    content += "| Tag | " + " | ".join(headers) + " |\n|---|" + "---:|" * len(sources) + "\n"
+    content += """{% for offset in range(7) -%}
+{% set date = (now().date() - timedelta(days=offset)) | string -%}
+| {{ 'Heute' if offset == 0 else 'Gestern' if offset == 1 else (now() - timedelta(days=offset)).strftime('%d.%m.%Y') }} |{% for source in pumps %}{% set item = (state_attr(source, 'daily_starts') or []) | selectattr('date', 'eq', date) | first | default(none) %} {{ item.starts if item and item.starts is not none else '—' }}{{ '*' if item and item.starts is not none and item.partial else '' }} |{% endfor %}
+{% endfor %}
+
+Einschaltungen = erfasste Aus→Ein-Wechsel. **—**: keine auswertbaren Daten. Sternchen: Erfassung unvollständig; Wert ist eine Mindestzahl.
+"""
+    return {"type":"markdown", "title":"Einschaltungen pro Tag", "content":content}
 
 
 def build_dashboard(hass, entry_id=None):
@@ -150,6 +169,7 @@ def build_dashboard(hass, entry_id=None):
     if operating or hours or starts:
         runtime_cards = []
         if starts:
+            runtime_cards.append(starts_table(starts))
             runtime_cards.append({"type":"entities", "title":"Einschaltungen heute", "show_header_toggle":False, "entities":starts})
         if operating:
             runtime_cards.extend([
@@ -240,6 +260,8 @@ def merge_dashboard(existing, generated):
         for new_card in new_view.get("cards", []):
             card = next((c for c in walk(view) if identity(c) == identity(new_card)), None)
             if card is not None:
+                if card.get('type') == 'markdown' and card.get('content','').startswith(TABLE_MARKER) and new_card.get('content','').startswith(TABLE_MARKER):
+                    card['content'] = new_card['content']
                 if card.get("type") in ("entities", "history-graph", "statistics-graph"):
                     defaults = {entity_id(r):r.get('name') for r in new_card.get('entities', []) if isinstance(r,dict)}
                     for old_row in card.get('entities', []):
@@ -311,6 +333,57 @@ async def save_dashboard_backup(hass, url_path, config):
     await store.async_save(saved)
 
 
+async def async_refresh_starts_tables(hass):
+    """Add only the daily table to recognized integration runtime views after startup."""
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+    from homeassistant.components.lovelace.dashboard import ConfigNotFound
+    lovelace = hass.data.get(LOVELACE_DATA)
+    if not lovelace:
+        return
+    registry = er.async_get(hass)
+    records = [e for e in registry.entities.values() if e.platform == DOMAIN]
+    running = {(e.config_entry_id,e.unique_id):e.entity_id for e in records if e.domain == 'binary_sensor' and e.unique_id.endswith('|isRunning')}
+    counters = [e for e in records if e.domain == 'sensor' and e.unique_id.endswith('|starts_today') and not e.disabled and not e.hidden]
+    if not counters:
+        return
+    def walk(container):
+        yield container
+        for key in ('cards','sections'):
+            for child in container.get(key,[]):
+                if isinstance(child,dict):yield from walk(child)
+    async with hass.data.setdefault(f'{DOMAIN}.dashboard_lock', asyncio.Lock()):
+        for url_path, target in lovelace.dashboards.items():
+            if target.mode != 'storage':continue
+            try:
+                existing = await target.async_load(False)
+                config = deepcopy(existing)
+                for view in config.get('views',[]):
+                    if view.get('path') != 'runtime' or view.get('type') == 'panel' or view.get('panel'):continue
+                    cards = list(walk(view))
+                    sources = {r if isinstance(r,str) else r.get('entity') for c in cards
+                               if c.get('type') == 'history-graph' and c.get('title') == 'Betrieb und Taktung – 24 Stunden'
+                               for r in c.get('entities',[]) if isinstance(r,(str,dict))}
+                    selected = [e for e in counters if running.get((e.config_entry_id,e.unique_id[:-len('starts_today')]+'isRunning')) in sources]
+                    if not selected:continue
+                    table = starts_table([{'entity':e.entity_id} for e in sorted(selected,key=lambda e:e.entity_id)])
+                    owned = next((c for c in cards if c.get('type') == 'markdown' and c.get('content','').startswith(TABLE_MARKER)), None)
+                    if owned is not None:
+                        owned['content'] = table['content']
+                    elif any(c.get('title') == table['title'] for c in cards):
+                        continue  # A user-maintained table with this title remains unchanged.
+                    elif view.get('type') == 'sections':
+                        view.setdefault('sections',[]).insert(0,{'type':'grid','cards':[table]})
+                    else:
+                        view.setdefault('cards',[]).insert(0,table)
+                if config != existing:
+                    await save_dashboard_backup(hass,url_path,existing)
+                    await target.async_save(config)
+            except ConfigNotFound:
+                continue
+            except (HomeAssistantError,OSError) as err:
+                LOGGER.warning('Could not update daily start table in %s: %s',url_path,err)
+
+
 async def restore_dashboard(hass, url_path):
     from homeassistant.components.lovelace.const import LOVELACE_DATA
     lovelace = hass.data.get(LOVELACE_DATA)
@@ -364,7 +437,7 @@ async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False, upd
 def async_register_dashboard_service(hass):
     if hass.services.has_service(DOMAIN, SERVICE):
         return
-    lock = asyncio.Lock()
+    lock = hass.data.setdefault(f"{DOMAIN}.dashboard_lock", asyncio.Lock())
 
     async def handle(call):
         async with lock:
