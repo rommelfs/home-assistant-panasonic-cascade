@@ -35,6 +35,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
                     entities.append(CascadeSensor(coordinator, ident, field))
         if model_key(row) == "heatPump" and "isRunning" in row:
             entities.append(CascadeDailyStartsSensor(coordinator, ident))
+    if getattr(coordinator, "buffer_charge", None) is not None:
+        from .charge_entities import BufferChargeSensor
+        entities.append(BufferChargeSensor(coordinator))
     async_add_entities(entities)
 
 

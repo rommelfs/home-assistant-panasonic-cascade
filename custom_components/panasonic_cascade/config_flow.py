@@ -11,6 +11,7 @@ from .const import DOMAIN
 from .model import name
 from .notifications import mobile_targets, TARGET
 from .zinc import reference
+from .buffer_charge import DEFAULTS as CHARGE_DEFAULTS, SOURCE_KEYS
 
 
 def secret_field():
@@ -154,7 +155,12 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             if target and (not TARGET.fullmatch(target) or not self.hass.services.has_service('notify', target)):
                 errors['base'] = 'notification_target_unavailable'
             else:
-                return self.async_create_entry(title='', data={**self.config_entry.options, **user_input})
+                data = {**self.config_entry.options, **user_input}
+                configure = data.pop('configure_pv_charge', False)
+                if configure:
+                    self._pending_options = data
+                    return await self.async_step_pv_charge()
+                return self.async_create_entry(title='', data=data)
         d = {**self.config_entry.options, **(user_input or {})}
         targets = [{'value':'', 'label':'Ausgeschaltet'}]
         available = mobile_targets(self.hass)
@@ -165,9 +171,44 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id='init', data_schema=vol.Schema({
             vol.Required('scan_interval', default=d.get('scan_interval', 30)): vol.All(vol.Coerce(int), vol.Range(min=15, max=300)),
             vol.Required('enable_controls', default=d.get('enable_controls', False)): bool,
+            vol.Required('configure_pv_charge', default=False): bool,
             vol.Required('use_dhw', default=d.get('use_dhw', True)): bool,
             vol.Required('power_threshold_w', default=d.get('power_threshold_w', 200)): vol.All(vol.Coerce(int), vol.Range(min=50, max=5000)),
             vol.Required('alarm_notify_service', default=d.get('alarm_notify_service', '')): selector.SelectSelector(selector.SelectSelectorConfig(options=targets)),
             vol.Required('alarm_time_sensitive', default=d.get('alarm_time_sensitive', True)): bool,
             vol.Required('verify_ssl', default=d.get('verify_ssl', self.config_entry.data.get('verify_ssl', True))): bool,
         }), errors=errors)
+
+
+    async def async_step_pv_charge(self, user_input=None):
+        errors = {}
+        previous = getattr(self, '_pending_options', dict(self.config_entry.options))
+        if user_input is not None:
+            # Clearing a selector must remove its previous source mapping.
+            sources = {f'pv_charge_{key}_sensor': '' for key in SOURCE_KEYS}
+            data = {**previous, **sources, **user_input}
+            if data.get('pv_charge_enabled') and (not data.get('enable_controls') or not data.get('pv_charge_confirmed')):
+                errors['base'] = 'pv_charge_not_confirmed'
+            elif data.get('pv_charge_enabled') and not all(data.get(key) for key in sources):
+                errors['base'] = 'pv_charge_missing_sources'
+            elif data['pv_charge_stop_w'] >= data['pv_charge_start_w']:
+                errors['base'] = 'pv_charge_thresholds'
+            else:
+                return self.async_create_entry(title='', data=data)
+        d = {**CHARGE_DEFAULTS, **previous, **(user_input or {})}
+        fields = {}
+        for key in ('pv_charge_enabled', 'pv_charge_auto', 'pv_charge_confirmed',
+                    'pv_charge_export_positive', 'pv_charge_discharge_positive'):
+            fields[vol.Required(key, default=d[key])] = bool
+        for key in SOURCE_KEYS:
+            field = f'pv_charge_{key}_sensor'
+            marker = vol.Optional(field, description={'suggested_value':d[field]}) if d.get(field) else vol.Optional(field)
+            fields[marker] = selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))
+        for key, low, high, step, unit in (
+            ('pv_charge_start_w', 100, 30000, 100, 'W'), ('pv_charge_stop_w', 0, 29900, 100, 'W'),
+            ('pv_charge_dwell_s', 15, 600, 15, 's'), ('pv_charge_offset', 1, 10, 1, '°C'),
+            ('pv_charge_duration_min', 1, 120, 1, 'min'), ('pv_charge_max_c', 20, 75, 1, '°C'),
+            ('pv_charge_max_age_s', 15, 300, 15, 's')):
+            fields[vol.Required(key, default=d[key])] = selector.NumberSelector(selector.NumberSelectorConfig(
+                min=low, max=high, step=step, unit_of_measurement=unit, mode='box'))
+        return self.async_show_form(step_id='pv_charge', data_schema=vol.Schema(fields), errors=errors)

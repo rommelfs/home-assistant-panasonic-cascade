@@ -7,6 +7,8 @@ BOOL_CONTROLS = {"sgReady", "stopRun"}
 ENUM_CONTROLS = {"quietModeRequest", "bufferMode", "zone1Zone2OnOffSetpoint"}
 # Direct setpoints use conservative limits; heating-curve limits match captured metadata.
 NUMBER_CONTROLS = {
+    # Buffer-only offset, deliberately narrower than possible controller ranges.
+    "tBufferTank": (0, 10),
     "zone1WaterTemperatureHotSetpoint": (20, 55),
     "zone1WaterTemperatureColdSetpoint": (5, 25),
     "tankWaterTempSpBeforeSgReady": (40, 60),

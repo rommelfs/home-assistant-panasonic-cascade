@@ -78,6 +78,7 @@ class FrontendRegistrationTest(unittest.IsolatedAsyncioTestCase):
         coordinator=SimpleNamespace(all_data={},async_config_entry_first_refresh=AsyncMock(side_effect=lambda:order.append('refresh')))
         with patch.object(integration,'async_setup_frontend',new=AsyncMock(side_effect=lambda *args:order.append('frontend'))), \
              patch.object(integration,'async_get_clientsession'),patch.object(integration,'CascadeClient'), \
+             patch.object(integration,'async_setup_charge',new=AsyncMock()), \
              patch.object(integration,'CascadeCoordinator',return_value=coordinator), \
              patch.object(integration,'async_apply_dhw_visibility',new=AsyncMock()), \
              patch.object(integration,'async_register_dashboard_service'),patch.object(integration,'async_call_later') as later, \

@@ -217,6 +217,7 @@ class NotificationsTest(unittest.IsolatedAsyncioTestCase):
         monitor=SimpleNamespace(async_start=AsyncMock(),async_stop=Mock())
         with patch.object(integration,'async_get_clientsession',return_value=object()), \
              patch.object(integration,'CascadeClient'), \
+             patch.object(integration,'async_setup_charge',new=AsyncMock()), \
              patch.object(integration,'CascadeCoordinator',return_value=coordinator), \
              patch.object(integration,'async_apply_dhw_visibility',new=AsyncMock()), \
              patch.object(integration,'async_setup_frontend',new=AsyncMock()), \

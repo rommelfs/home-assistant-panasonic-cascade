@@ -19,6 +19,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
             entities.extend(CascadeBinarySensor(coordinator, ident, field) for field in STATUS_FIELDS if type(row.get(field)) is bool)
             if model_key(row) == 'heatPump':
                 entities.append(CascadePowerRunningSensor(coordinator, ident))
+    if getattr(coordinator, "buffer_charge", None) is not None:
+        from .charge_entities import BufferChargeActive
+        entities.append(BufferChargeActive(coordinator))
     async_add_entities(entities)
 
 

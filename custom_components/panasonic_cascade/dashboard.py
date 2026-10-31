@@ -1,6 +1,7 @@
 """Build a native dashboard using the installed entity registry IDs."""
 import asyncio
 import logging
+import json
 from copy import deepcopy
 from datetime import UTC, datetime
 
@@ -94,6 +95,7 @@ def build_dashboard(hass, entry_id=None):
         raise HomeAssistantError("No enabled Cascade entities found; load the integration first")
     groups, controls, overview, temperatures, power, energy, alarms, efficiency, statistical_energy = {}, [], [], [], [], [], [], [], []
     operating, hours, electrical_energy, starts, power_running = [], [], [], [], []
+    charge_rows = []
     point_models = {}
     for entry in entries:
         data = getattr(getattr(entry, "runtime_data", None), "data", {})
@@ -104,6 +106,9 @@ def build_dashboard(hass, entry_id=None):
         if entity.unique_id.endswith("|isRunning") and not entity.name:
             label = label.replace(" · In Betrieb", " · Betriebsfreigabe").replace(" – In Betrieb", " · Betriebsfreigabe")
         row = {"entity": entity.entity_id, "name": label}
+        if entity.unique_id.endswith(('|pv_buffer_charge', '|pv_buffer_charge_start', '|pv_buffer_charge_stop', '|pv_buffer_charge_active')):
+            charge_rows.append(row)
+            continue
         device = devices.devices.get(entity.device_id)
         group = device.name_by_user or device.name if device else "Anlage"
         group = name({"dis": group or "Anlage"})
@@ -227,7 +232,62 @@ def build_dashboard(hass, entry_id=None):
                 "{% endfor %}{% endif %}")
             cards.append({"type":"markdown", "title":row["name"], "content":content})
         views.append({"title":"Alarme", "path":"alarms", "icon":"mdi:alert-circle-outline", "cards":cards})
-    return polish_dashboard(hass, {"title":"Panasonic Cascade", "views":views}, registry)
+    config = polish_dashboard(hass, {"title":"Panasonic Cascade", "views":views}, registry)
+    if charge_rows:
+        settings = next((v for v in config['views'] if v.get('path') == 'settings'), None)
+        if settings is None:
+            settings = {'title':'Einstellungen','path':'settings','icon':'mdi:tune','cards':[]}
+            config['views'].append(settings)
+        settings['cards'].insert(0, {'type':'entities','title':'PV-Pufferladung','show_header_toggle':False,'entities':[r for r in charge_rows if not r['entity'].startswith('binary_sensor.')]})
+        status = [r['entity'] for r in charge_rows if r['entity'].startswith('sensor.')]
+        for entity_id in status:
+            content = "{{ state_attr('" + entity_id + "','reason') or 'PV-Pufferladung in den Integrationsoptionen konfigurieren.' }}\n\n"
+            for attribute, label, unit in [('baseline_offset','Vorheriger Versatz','°C'), ('requested_offset','Temporärer Versatz','°C'),
+                                          ('effective_offset','Wirksamer Versatz','°C'), ('zone_target','Zone Soll','°C'),
+                                          ('buffer_target','Puffer Soll','°C'), ('buffer_temperature','Puffer Ist','°C'),
+                                          ('temperature_limit','Abschaltgrenze','°C'), ('remaining_minutes','Restzeit','min')]:
+                content += label + ": {{ state_attr('" + entity_id + "','" + attribute + "') if state_attr('" + entity_id + "','" + attribute + "') is not none else '—' }} " + unit + "  \n"
+            content += "\nDie Abschaltgrenze bis 75 °C ist kein absoluter Puffersollwert. Der bestätigte Versatz beträgt höchstens 10 °C."
+            settings['cards'].insert(1, {'type':'markdown','title':'PV-Ladung · Rückstellung und Messwerte','content':content})
+    overview = next(v for v in config['views'] if v.get('path') == 'overview')
+    pv_cards = []
+    for row in charge_rows:
+        record = registry.entities[row['entity']]
+        if not record.unique_id.endswith('|pv_buffer_charge'):
+            continue
+        entry = next(e for e in entries if e.entry_id == record.config_entry_id)
+        binary = next((r['entity'] for r in charge_rows if r['entity'].startswith('binary_sensor.')
+                       and registry.entities[r['entity']].config_entry_id == record.config_entry_id), None)
+        if not binary:
+            continue
+        entity_id = row['entity']
+        active = {'type':'conditional','conditions':[{'entity':binary,'state':'on'}],
+                  'card':{'type':'markdown','title':'☀️ PV-Pufferladung aktiv',
+                          'content':"**Die Pufferladung ist freigegeben.**\n\nRestzeit: **{{ state_attr('"+entity_id+"','remaining_minutes') }} min** · Versatz: **{{ state_attr('"+entity_id+"','requested_offset') }} °C**\n\nDie Rückstellung auf den vorherigen Versatz erfolgt beim Beenden automatisch, sobald der Regler erreichbar ist."}}
+        fault = {'type':'conditional','conditions':[{'condition':'or','conditions':[
+                    {'condition':'state','entity':entity_id,'state':'Rückstellung ausstehend'},
+                    {'condition':'state','entity':entity_id,'state':'Externe Änderung'}]}],
+                 'card':{'type':'markdown','title':'⚠️ PV-Pufferladung · Rückstellung prüfen',
+                         'content':"**{{ states('"+entity_id+"') }}**\n\n{{ state_attr('"+entity_id+"','reason') }}\n\nEine Rückstellung ist noch nicht bestätigt. Den Regler prüfen; eine fremde Vorgabe wird nicht überschrieben."}}
+        overview['cards'][0:0] = [fault, active]
+        if entry.options.get('pv_charge_enabled') or getattr(getattr(entry.runtime_data,'buffer_charge',None),'lease',None):
+            band={'type':'history-graph','title':'PV-Pufferladung · Freigabe (24 h)','hours_to_show':24,
+                  'entities':[{'entity':binary,'name':'PV-Pufferladung'}]}
+            overview['cards'].insert(2,band)
+            pv_cards.append({'type':'history-graph','title':'PV-Pufferladung · 7 Tage','hours_to_show':168,
+                             'entities':[{'entity':binary,'name':'PV-Pufferladung'}]})
+            temperature = entry.options.get('pv_charge_temperature_sensor')
+            if temperature:
+                pv_cards.append({'type':'history-graph','title':'Puffertemperatur · 48 Stunden','hours_to_show':48,
+                                 'entities':[{'entity':temperature,'name':'Puffer Ist'}]})
+            powers=[{'entity':entry.options[f'pv_charge_{key}_sensor'],'name':label}
+                    for key,label in [('pv','PV'),('export','Netz (Rohwert)'),('battery','Batterie (Rohwert)')]
+                    if entry.options.get(f'pv_charge_{key}_sensor')]
+            if powers:pv_cards.append({'type':'history-graph','title':'PV, Netz und Batterie · 48 Stunden','hours_to_show':48,'entities':powers})
+    if pv_cards:
+        pv_cards.insert(0, {'type':'markdown','content':'Das Band zeigt die bestätigte PV-Ladefreigabe. Unbekannt bedeutet, dass die Wirkung beziehungsweise Rückstellung nicht bestätigt ist. Verdichterlaufzeiten sind separat unter Laufzeiten & Taktung zu finden. Historie beginnt mit der Installation; Recorder muss diese Entitäten aufzeichnen.'})
+        config['views'].append({'title':'PV-Pufferladung','path':'pv-buffer','icon':'mdi:solar-power-variant','cards':pv_cards})
+    return config
 
 
 def polish_dashboard(hass, config, registry=None):
@@ -326,6 +386,8 @@ def merge_dashboard(existing, generated):
             yield from walk(container["card"])
 
     def identity(card):
+        if card.get('type') == 'conditional':
+            return ('conditional', json.dumps(card.get('conditions', []), sort_keys=True), card.get('card', {}).get('title'))
         if card.get("type") == "custom:panasonic-cascade-heating-curve":
             return (card["type"], tuple(sorted(card.get("entities", {}).items())))
         return ("entities" if card.get("type") == "entity-filter" else card.get("type"), card.get("title"), card.get("entity"))
@@ -346,6 +408,7 @@ def merge_dashboard(existing, generated):
                 extra = {**deepcopy(new_view), "path":path, "cards":[]}
                 result["views"].append(extra)
             view = extra
+        pv_added_count = 0
         for new_card in new_view.get("cards", []):
             card = next((c for c in walk(view) if identity(c) == identity(new_card)), None)
             if card is not None and isinstance(card.get('entities'),list) and isinstance(new_card.get('entities'),list):
@@ -388,10 +451,16 @@ def merge_dashboard(existing, generated):
                             card.setdefault("entities", []).append(deepcopy(row))
                             present.add(ident)
                 continue
-            if view.get("type") == "sections":
-                view.setdefault("sections", []).append({"type":"grid", "cards":[deepcopy(new_card)]})
+            prominent = view.get('path') == 'overview' and (
+                new_card.get('card', {}).get('title') in ('☀️ PV-Pufferladung aktiv','⚠️ PV-Pufferladung · Rückstellung prüfen')
+                or new_card.get('title') == 'PV-Pufferladung · Freigabe (24 h)')
+            container = view.setdefault('sections' if view.get('type') == 'sections' else 'cards', [])
+            addition = {'type':'grid','cards':[deepcopy(new_card)]} if view.get('type') == 'sections' else deepcopy(new_card)
+            if prominent:
+                container.insert(pv_added_count, addition)
+                pv_added_count += 1
             else:
-                view.setdefault("cards", []).append(deepcopy(new_card))
+                container.append(addition)
     return result
 
 
@@ -531,7 +600,7 @@ async def async_refresh_starts_tables(hass):
     records = [e for e in registry.entities.values() if e.platform == DOMAIN]
     running = {(e.config_entry_id,e.unique_id):e.entity_id for e in records if e.domain == 'binary_sensor' and e.unique_id.endswith('|isRunning')}
     counters = [e for e in records if e.domain == 'sensor' and e.unique_id.endswith('|starts_today') and not e.disabled and not e.hidden]
-    if not counters:
+    if not counters and not any(e.unique_id.endswith('|pv_buffer_charge') for e in records):
         return
     def walk(container):
         yield container

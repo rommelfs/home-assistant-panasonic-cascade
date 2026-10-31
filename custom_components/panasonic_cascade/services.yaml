@@ -37,3 +37,51 @@ restore_dashboard:
       example: panasonic-cascade
       selector:
         text:
+start_buffer_charge:
+  name: Start temporary PV buffer charge
+  description: Apply a bounded buffer offset only while verified, fresh PV export and temperature guards permit. Persist and restore the original offset. This does not set an absolute 75 °C target.
+  fields:
+    entry_id:
+      name: Installation
+      required: true
+      selector:
+        config_entry:
+          integration: panasonic_cascade
+    offset:
+      name: Temporary buffer offset
+      description: Absolute offset default to apply, not a delta added to the existing offset. Leave empty for the configured value.
+      selector:
+        number:
+          min: 1
+          max: 10
+          unit_of_measurement: °C
+          mode: box
+    duration_minutes:
+      name: Maximum duration
+      description: Leave empty for the configured duration. Existing charges cannot be extended by overlapping requests.
+      selector:
+        number:
+          min: 1
+          max: 120
+          unit_of_measurement: min
+          mode: box
+stop_buffer_charge:
+  name: Stop PV buffer charge and restore offset
+  description: Restore the recorded original offset if the current default still belongs to this charge. Failed restorations remain pending and retry on reconnect.
+  fields:
+    entry_id:
+      name: Installation
+      required: true
+      selector:
+        config_entry:
+          integration: panasonic_cascade
+acknowledge_buffer_charge_conflict:
+  name: Acknowledge external buffer offset change
+  description: Clear a conflict after checking the controller. Keep the operator's external setting; this action performs no controller write.
+  fields:
+    entry_id:
+      name: Installation
+      required: true
+      selector:
+        config_entry:
+          integration: panasonic_cascade

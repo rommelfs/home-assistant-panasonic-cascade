@@ -2,7 +2,7 @@
 from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 
 from .entity import CascadeEntity
-from .model import bounds, control_kind
+from .model import bounds, control_kind, is_buffer_offset, validate_buffer_offset
 from .zinc import value
 
 PARALLEL_UPDATES = 1
@@ -24,6 +24,20 @@ class CascadeNumber(CascadeEntity, NumberEntity):
         super().__init__(coordinator, ident)
         self._attr_unique_id += "|control"
         self._attr_name += " · Vorgabe"
+        if is_buffer_offset(self.row):
+            self._attr_name = "Puffer · Zonenversatz (dauerhaft)"
+            # A temperature difference is not an absolute temperature.
+            self._attr_device_class = None
+            self._attr_icon = "mdi:thermometer-plus"
+
+    @property
+    def available(self):
+        if is_buffer_offset(self.row):
+            try:
+                validate_buffer_offset(self.row)
+            except ValueError:
+                return False
+        return super().available and control_kind(self.row) == "number"
 
     @property
     def native_min_value(self):

@@ -8,6 +8,10 @@ from .notifications import async_test_push
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    manager = getattr(getattr(entry, 'runtime_data', None), 'buffer_charge', None)
+    if manager is not None and (entry.options.get('pv_charge_enabled') or manager.lease):
+        from .charge_entities import BufferChargeButton
+        async_add_entities([BufferChargeButton(entry.runtime_data), BufferChargeButton(entry.runtime_data, stop=True)])
     if entry.options.get('alarm_notify_service'):
         async_add_entities([CascadePushTestButton(entry.runtime_data)])
 

@@ -1,4 +1,5 @@
 """Point classification kept independent of Home Assistant for fixture testing."""
+import math
 from .const import BOOL_CONTROLS, ENUM_CONTROLS, NUMBER_CONTROLS
 from .zinc import MARKER, Number, Ref, value
 
@@ -61,6 +62,9 @@ def control_kind(row):
     if "pointSetDef(" not in str(row.get("actions", "")):
         return None
     key = model_key(row)
+    # A heat pump also reports tBufferTank. Only the cascade buffer offset is editable.
+    if key == "tBufferTank" and not is_buffer_offset(row):
+        return None
     if row.get("kind") == "Bool" and key in BOOL_CONTROLS:
         return "switch"
     if row.get("kind") == "Str" and key in ENUM_CONTROLS and enum_options(row):
@@ -70,6 +74,27 @@ def control_kind(row):
         if low < high:
             return "number"
     return None
+
+
+def is_buffer_offset(row):
+    return model_key(row) == "tBufferTank" and row.get("bufferModelId") == "_equip:buffer_point:tBufferTank" and not any(row.get(tag) for tag in ("heatPumpModelId", "heatPumpAquareaModelId", "tankModelId"))
+
+
+def validate_buffer_offset(row, require_effective_default=True):
+    """Refuse missing feedback and active schedules/overrides before editing a default."""
+    if not is_buffer_offset(row) or control_kind(row) != "number":
+        raise ValueError("Buffer offset control is not supported")
+    if row.get("curStatus") != "ok":
+        raise ValueError("Current buffer offset is unavailable")
+    for tag in ("curVal", "writeDef"):
+        raw = row.get(tag)
+        if isinstance(raw, Number) and raw.unit not in ("", "°C"):
+            raise ValueError("Buffer offset feedback has incompatible units")
+    effective, default = value(row.get("curVal")), value(row.get("writeDef"))
+    if any(type(raw) not in (int, float) or not math.isfinite(raw) for raw in (effective, default)):
+        raise ValueError("Current buffer offset/default is unavailable")
+    if require_effective_default and effective != default:
+        raise ValueError("A buffer offset schedule or override is active; remove it in the controller first")
 
 
 def enum_options(row):
@@ -84,8 +109,14 @@ def unit(row):
 def bounds(row):
     low, high = NUMBER_CONTROLS[model_key(row)]
     outdoor = "OutdoorAir" in model_key(row)
-    min_tags = ("minVal",) if outdoor else ("minVal", "hotSpMin" if "Cold" not in model_key(row) else "coldSpMin")
-    max_tags = ("maxVal",) if outdoor else ("maxVal", "hotSpMax" if "Cold" not in model_key(row) else "coldSpMax")
+    relative = is_buffer_offset(row)
+    if relative:
+        for tag in ('minVal', 'maxVal'):
+            raw = row.get(tag)
+            if raw is not None and (not isinstance(raw, Number) or raw.unit not in ('', '°C') or not math.isfinite(raw.value)):
+                return 0, 0
+    min_tags = ("minVal",) if outdoor or relative else ("minVal", "hotSpMin" if "Cold" not in model_key(row) else "coldSpMin")
+    max_tags = ("maxVal",) if outdoor or relative else ("maxVal", "hotSpMax" if "Cold" not in model_key(row) else "coldSpMax")
     for tag in min_tags:
         raw = row.get(tag)
         if isinstance(raw, Number) and raw.unit in ("", "°C"):

@@ -2,6 +2,13 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.11.0](docs/releases/v0.11.0.md)
+
+- Add an opt-in cascade buffer offset, bounded to 0–10 °C and live controller limits; preserve existing point identities.
+- Add temporary PV charge actions, guarded optional automatic start and durable compare-before-restore leases with reconnect recovery.
+- Add explicit signed PV/grid/battery and actual temperature sources, freshness guards, start/stop hysteresis and a temperature stop limit capped at 75 °C. This is not an absolute 75 °C buffer target.
+- Prominently show active charging and restoration faults on the WP overview; add 24-hour/seven-day charge-permission history and associated measurements while preserving existing energy/runtime/custom cards.
+
 ## [0.10.1](docs/releases/v0.10.1.md)
 
 - Recover reboot-invalidated sessions automatically using saved credentials; distinguish expired-session 403 responses from actual permission failures.

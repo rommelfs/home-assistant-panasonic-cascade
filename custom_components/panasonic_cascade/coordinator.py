@@ -7,7 +7,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import ApiError, AuthError
-from .model import zone1_value, visible_data
+from .model import zone1_value, visible_data, is_buffer_offset, validate_buffer_offset
 
 LOGGER = logging.getLogger(__name__)
 
@@ -44,6 +44,11 @@ class CascadeCoordinator(DataUpdateCoordinator):
             raise HomeAssistantError("Controller data is unavailable")
         try:
             row = self.data[ident]
+            if is_buffer_offset(row):
+                if getattr(getattr(self, "buffer_charge", None), "lease", None):
+                    raise ValueError("Stop PV buffer charging and resolve pending restoration before changing the offset")
+                row = await self.client.read_point(ident, self.entry.data["site_id"])
+                validate_buffer_offset(row)
             if zone1:
                 row = await self.client.read_point(ident, self.entry.data["site_id"])
                 new_value = zone1_value(row, new_value)

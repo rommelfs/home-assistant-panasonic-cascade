@@ -2,7 +2,7 @@
 
 Experimental custom integration for the local FIN/Haystack API used by the Panasonic Cascade Control web interface (`panCascadeControlExt`).
 
-The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.10.1** automatically recovers reboot-invalidated FIN sessions with the saved controller credentials, including 403 responses and temporarily unavailable login services. The 0.10.0 curve loading fix and configurable 200 W cycling estimates remain available. Hardware writes have not yet been verified on a real installation.
+The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.11.0** adds opt-in temporary PV buffer charging with persisted restoration, measurement guards, optional automatic start and dashboard history. The supported offset remains 0–10 °C; the stop limit up to 75 °C is not an absolute buffer target. Automatic session recovery, the curve-loading fix and configurable 200 W cycling estimates remain available. Hardware writes have not yet been verified on a real installation.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
@@ -121,7 +121,7 @@ Existing native dashboard cards are cleaned of matching entity references; cards
 
 ## Optional controls and Zone 1 switching
 
-Open **Configure**, enable the experimental controls option, and save. Controls are disabled by default. Twelve supported point models were identified in the captures:
+Open **Configure**, enable the experimental controls option, and save. Controls are disabled by default. The supported point models are listed below. The buffer offset is an experimental addition identified from the controller UI and manual; its write behavior has not yet been verified on hardware.
 
 | Control | FIN model |
 | --- | --- |
@@ -137,10 +137,21 @@ Open **Configure**, enable the experimental controls option, and save. Controls 
 | Zone 1 heating curve: min. water | `compensationCurveHeatZone1MinTemperature` |
 | Zone 1 heating curve: max. outdoor | `compensationCurveHeatZone1OutdoorAirMaxTemperature` |
 | Zone 1 heating curve: min. outdoor | `compensationCurveHeatZone1OutdoorAirMinTemperature` |
+| Cascade buffer offset relative to zones | `tBufferTank` (buffer record only) |
 
 Controls use only the **`pointSetDef` / Set Default** action advertised in point metadata. General switches, selectors, and temperature controls display `writeDef`, the default being edited. Separate point sensors display `curVal`, the currently effective value. Schedules and manual overrides can make these values differ. The integration does not create manual or emergency overrides.
 
 Temperature limits are conservative: **20–55 °C** for heating, **5–25 °C** for cooling, and **40–60 °C** for domestic hot water. The four heating-curve controls use the captured limits: **20–75 °C** for water endpoints and **−20 to +15 °C** for outdoor endpoints. Tighter controller limits take precedence; water-temperature limits do not restrict the outdoor axis. Numeric setpoints are sent with their °C unit. Sterilization triggers, emergency actions, and arbitrary FIN expressions are not exposed as controls. Actual control availability also depends on server metadata and write permissions.
+
+### Temporary PV buffer charging
+
+Available since **0.11.0**, disabled by default. Configure verified PV, signed grid/battery power and actual buffer temperature sources under **Configure → Configure temporary PV buffer charging**. Use **PV-Pufferladung starten/beenden** or the `start_buffer_charge` / `stop_buffer_charge` actions. Optional automatic start waits for stable surplus. The integration persists the original offset before writing, limits the duration and restores the original default on stop, loss of guards, expiry or restart. Failed restoration remains pending; independent operator changes are preserved.
+
+The controller advertises only **0–10 °C** buffer offset relative to zones. A **75 °C temperature stop limit does not command a 75 °C buffer target**. The persistent manual number is named **Puffer · Zonenversatz (dauerhaft)**; use the timed actions for PV charging. This feature requires the cascade heating mode and does not change the heating curve, zone enable or SG Ready.
+
+The WP overview prominently displays an active charge or restoration problem and a 24-hour on/off permission band. A separate PV charge view shows seven-day history and associated temperature/power plots. Existing energy/runtime/custom cards are preserved and backed up before recognized upgrades.
+
+Read [setup, operation and restoration requirements](docs/pv-buffer-charge.md) before enabling unattended charging. Invalid actual buffer feedback, such as −78 °C, blocks it. Software cannot restore an offset while HA/controller communication is unavailable.
 
 ### Zone 1 heating curve and live preview
 
