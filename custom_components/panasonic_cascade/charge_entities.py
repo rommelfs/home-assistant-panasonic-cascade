@@ -41,6 +41,8 @@ class BufferChargeSensor(ChargeEntity, SensorEntity):
 
     @property
     def native_value(self):
+        if self.manager.status == 'charging' and (self.manager.lease or {}).get('temperature_unmonitored_test'):
+            return 'Ladetest ohne Temperaturüberwachung'
         return {'disabled':'Deaktiviert', 'idle':'Bereit', 'charging':'Lädt', 'restore_pending':'Rückstellung ausstehend',
                 'conflict':'Externe Änderung', 'waiting':'Wartet auf Überschuss', 'ready':'Startbereit',
                 'blocked':'Gesperrt'}.get(self.manager.status, self.manager.status)
@@ -63,7 +65,9 @@ class BufferChargeSensor(ChargeEntity, SensorEntity):
                 'effective_offset':value(offsets[0].get('curVal')) if len(offsets)==1 and offsets[0].get('curStatus')=='ok' else None,
                 'buffer_target':point('bufferSetpoint'), 'zone_target':point('zone1WaterTemperatureSetpoint'),
                 'buffer_temperature':measured.get('temperature'),
-                'temperature_limit':manager.options['pv_charge_max_c'],
+                'temperature_limit':None if lease.get('temperature_unmonitored_test') else manager.options['pv_charge_max_c'],
+                'temperature_unmonitored_test':bool(lease.get('temperature_unmonitored_test')),
+                'unmonitored_test_configured':manager.unmonitored_test,
                 'remaining_minutes':round(max(0,lease.get('expires',0)-manager.clock())/60,1) if lease else 0,
                 'expires_at':datetime.fromtimestamp(lease['expires'],UTC).isoformat() if lease else None,
                 'automatic':manager.options['pv_charge_auto'], 'restoration_pending':bool(lease and lease['phase']!='charging')}

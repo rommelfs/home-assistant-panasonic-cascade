@@ -19,6 +19,17 @@ The configurable **buffer temperature stop limit** is capped at **75 °C**. It i
 
 Sources must actually update often enough. Increasing the maximum age does not make a slow integration fast feedback. Missing, stale, non-finite or incorrectly dimensioned measurements block charging; they are never replaced with zero. No PV production, grid import, battery discharge above 100 W, leaving the cascade heating mode, or reaching the temperature limit ends a charge. Export falling below the stop threshold ends it as well. The conditions are checked on source state changes and at least every 15 seconds; a dedicated deadline callback also requests restoration at expiry. Physical device/network delays remain possible.
 
+## Explicit sensorless hardware charge test (0.11.1)
+
+For a supervised commissioning test before a buffer sensor is installed, explicitly select **Charge test WITHOUT buffer sensor** in the PV options. This is a real heat-pump command, not a simulation. Leave the temperature source empty; no artificial temperature is generated. The temperature cutoff is unavailable in this mode, even if a temperature source remains selected. Normal charging still requires a valid actual buffer temperature.
+
+- Enable experimental controls and temporary PV charging, select the test checkbox and confirm the available power readings, signs and mixing circuit. Keep **automatic start off**; the form rejects automatic operation with this test.
+- Start manually with the ordinary charge button or action, only while supervising the installation. Stable PV export, fresh signed grid/battery/PV measurements, no grid import or significant battery discharge, heating mode and writable controller feedback remain required.
+- A test raises the original offset by **at most 2 °C**, respecting the live upper bound and the overall 10 °C limit. The ordinary offset setting/action argument is not applied in this mode. The duration is the requested/configured duration capped at **five minutes**. Repeated/overlapping starts cannot extend a running test.
+- The original default is stored before writing and restored on stop, guard failure, expiry or restart/reload. Restoration failures remain pending and retry on reconnect. HA/network downtime can delay restoration beyond five minutes; this is not a controller-side timeout.
+- Status explicitly reads **Ladetest ohne Temperaturüberwachung**; the overview warns that temperature protection is absent. The status stores `temperature_unmonitored_test` during the lease and Recorder retains it with the on/off band. No inferred temperature or claimed active temperature limit is displayed.
+- Once the real sensor is installed, select and verify it, **clear the sensorless test checkbox**, then use normal temperature-monitored charging. The test checkbox defaults to off on new installations.
+
 ## Start and stop
 
 The cascade must already be in heating mode. A charge raises the buffer offset; it does not enable a disabled heating zone or force a compressor to run.

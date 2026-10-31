@@ -189,7 +189,10 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             data = {**previous, **sources, **user_input}
             if data.get('pv_charge_enabled') and (not data.get('enable_controls') or not data.get('pv_charge_confirmed')):
                 errors['base'] = 'pv_charge_not_confirmed'
-            elif data.get('pv_charge_enabled') and not all(data.get(key) for key in sources):
+            elif data.get('pv_charge_test_without_temperature') and data.get('pv_charge_auto'):
+                errors['base'] = 'pv_charge_test_manual_only'
+            elif data.get('pv_charge_enabled') and not all(data.get(key) for key in sources
+                    if key != 'pv_charge_temperature_sensor' or not data.get('pv_charge_test_without_temperature')):
                 errors['base'] = 'pv_charge_missing_sources'
             elif data['pv_charge_stop_w'] >= data['pv_charge_start_w']:
                 errors['base'] = 'pv_charge_thresholds'
@@ -197,7 +200,7 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
                 return self.async_create_entry(title='', data=data)
         d = {**CHARGE_DEFAULTS, **previous, **(user_input or {})}
         fields = {}
-        for key in ('pv_charge_enabled', 'pv_charge_auto', 'pv_charge_confirmed',
+        for key in ('pv_charge_enabled', 'pv_charge_auto', 'pv_charge_test_without_temperature', 'pv_charge_confirmed',
                     'pv_charge_export_positive', 'pv_charge_discharge_positive'):
             fields[vol.Required(key, default=d[key])] = bool
         for key in SOURCE_KEYS:

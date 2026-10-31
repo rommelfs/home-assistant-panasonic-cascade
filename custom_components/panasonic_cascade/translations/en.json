@@ -73,11 +73,11 @@
       },
       "pv_charge": {
         "title": "Temporary PV buffer charging",
-        "description": "Disabled until explicitly enabled. The supported offset is 0–10 °C; a stop limit up to 75 °C does not command that absolute target. Power sources require W/kW and regular fresh updates; temperature requires °C. No charge is permitted without valid actual buffer feedback.",
+        "description": "Disabled until explicitly enabled. The supported offset is 0–10 °C; a stop limit up to 75 °C does not command that absolute target. Power sources require W/kW and regular fresh updates; temperature requires °C. Normal charging requires valid actual buffer feedback; only the explicitly selected hardware test omits it. Sensorless test: real heat-pump write without temperature cutoff. Start manually under supervision, never for unattended operation. Maximum 5 minutes and 2 °C additional offset. Automatic start must be off. The previous offset is restored afterwards when the controller is reachable.",
         "data": {
           "pv_charge_enabled": "Enable temporary PV buffer charging",
           "pv_charge_auto": "Start automatically when PV export is stable",
-          "pv_charge_confirmed": "Measurement signs, hottest-point buffer sensor, temperature limit and mixing circuit have been verified",
+          "pv_charge_confirmed": "Power readings, signs and mixing circuit checked; temperature protection verified OR explicitly selected the sensorless test above",
           "pv_charge_export_positive": "Positive grid sensor values mean export",
           "pv_charge_discharge_positive": "Positive battery sensor values mean discharge",
           "pv_charge_export_sensor": "Signed grid export/import power",
@@ -90,15 +90,17 @@
           "pv_charge_offset": "Temporary offset relative to zones (not an absolute target)",
           "pv_charge_duration_min": "Maximum charge duration",
           "pv_charge_max_c": "Buffer temperature stop limit (not a 75 °C target)",
-          "pv_charge_max_age_s": "Maximum measurement age"
+          "pv_charge_max_age_s": "Maximum measurement age",
+          "pv_charge_test_without_temperature": "Explicit charge test WITHOUT buffer sensor (manual, max. 5 min, up to 2 °C additional offset)"
         }
       }
     },
     "error": {
       "notification_target_unavailable": "The selected phone is not available as a notification target. Connect the Companion App or disable alarm push.",
       "pv_charge_not_confirmed": "Enable experimental controls and confirm the verified prerequisites.",
-      "pv_charge_missing_sources": "Select all four measurement sources.",
-      "pv_charge_thresholds": "The start threshold must exceed the stop threshold."
+      "pv_charge_missing_sources": "Select all three power sources and, for normal charging, the actual buffer temperature.",
+      "pv_charge_thresholds": "The start threshold must exceed the stop threshold.",
+      "pv_charge_test_manual_only": "Sensorless charge tests do not allow automatic start."
     }
   }
 }

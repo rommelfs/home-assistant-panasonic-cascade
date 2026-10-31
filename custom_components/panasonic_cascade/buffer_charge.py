@@ -19,6 +19,7 @@ from .zinc import value
 
 DEFAULTS = {
     'pv_charge_enabled': False, 'pv_charge_auto': False, 'pv_charge_confirmed': False,
+    'pv_charge_test_without_temperature': False,
     'pv_charge_export_positive': True, 'pv_charge_discharge_positive': True,
     'pv_charge_start_w': 1500, 'pv_charge_stop_w': 500, 'pv_charge_dwell_s': 120,
     'pv_charge_offset': 5, 'pv_charge_duration_min': 30, 'pv_charge_max_c': 75,
@@ -36,10 +37,12 @@ def finite(raw):
     return result
 
 
-def measurements(hass, options, now):
+def measurements(hass, options, now, *, unmonitored_test=False):
     """Normalize explicit signed sources; unknown/stale data never become zero."""
     result = {}
     for key in SOURCE_KEYS:
+        if key == 'temperature' and unmonitored_test:
+            continue
         entity_id = options.get(f'pv_charge_{key}_sensor')
         state = hass.states.get(entity_id) if entity_id else None
         if state is None:
@@ -66,7 +69,7 @@ def measurements(hass, options, now):
         raise ValueError('Battery is discharging')
     if result['export'] < 0:
         raise ValueError('Grid import')
-    if result['temperature'] >= min(75, finite(options['pv_charge_max_c'])):
+    if not unmonitored_test and result['temperature'] >= min(75, finite(options['pv_charge_max_c'])):
         raise ValueError('Buffer temperature limit reached')
     return result
 
@@ -137,8 +140,14 @@ class BufferCharge:
         o = self.options
         return o['pv_charge_enabled'] and o['pv_charge_confirmed'] and o.get('enable_controls', False)
 
+    @property
+    def unmonitored_test(self):
+        return self.options['pv_charge_test_without_temperature'] is True
+
     def readings(self):
-        return measurements(self.hass, self.options, self.clock())
+        # A test option may not weaken an existing normal charge's guards.
+        testing = self.unmonitored_test and (self.lease is None or self.lease.get('temperature_unmonitored_test') is True)
+        return measurements(self.hass, self.options, self.clock(), unmonitored_test=testing)
 
     def point(self):
         points = [ident for ident, row in (self.c.data or {}).items() if is_buffer_offset(row)]
@@ -168,7 +177,10 @@ class BufferCharge:
         if self.lease:
             raise HomeAssistantError('A charge or unresolved restoration already exists; overlapping charges are not allowed')
         o = self.options
+        testing = self.unmonitored_test
         try:
+            if testing and o['pv_charge_auto']:
+                raise ValueError('Unmonitored charge tests require automatic start to be off')
             offset = finite(o['pv_charge_offset'] if offset is None else offset)
             duration = finite(o['pv_charge_duration_min'] if duration is None else duration)
             if not 1 <= duration <= 120 or not 1 <= offset <= 10:
@@ -185,6 +197,11 @@ class BufferCharge:
             row = await self.fresh(ident)
             validate_buffer_offset(row)
             baseline = value(row['writeDef'])
+            if testing:
+                # Fixed additional 2 K, never beyond the verified 10 K/live limit.
+                # Caller/config values cannot raise or extend this test envelope.
+                offset = min(baseline + 2, 10, bounds(row)[1])
+                duration = min(duration, 5)
             if not bounds(row)[0] <= offset <= bounds(row)[1] or offset <= baseline:
                 raise ValueError('Charge offset must exceed the existing default and respect live controller bounds')
             # Recheck source guards after the network read, immediately before writing.
@@ -193,7 +210,8 @@ class BufferCharge:
         except (ApiError, AuthError, ValueError, TypeError) as err:
             raise HomeAssistantError(str(err)) from err
         self.lease = {'point': ident, 'baseline': baseline, 'applied': offset,
-                      'expires': self.clock() + duration * 60, 'phase': 'applying'}
+                      'expires': self.clock() + duration * 60, 'phase': 'applying',
+                      'temperature_unmonitored_test': testing}
         self.reason = ''
         try:
             # Durable recovery intent is mandatory before the first device write.
@@ -309,6 +327,8 @@ class BufferCharge:
                 try:
                     if not self.configured():
                         reason = 'PV charging disabled'
+                    elif self.lease.get('temperature_unmonitored_test') and (not self.unmonitored_test or self.options['pv_charge_auto']):
+                        reason = 'Manual unmonitored test permission removed'
                     elif self.clock() >= self.lease['expires']:
                         reason = 'Charge duration expired'
                     elif not self.c.last_update_success:
@@ -342,7 +362,7 @@ class BufferCharge:
                         stable = self.clock() - self.stable_since >= self.options['pv_charge_dwell_s']
                         self.status = 'ready' if stable else 'waiting'
                         self.reason = 'Stable PV export; ready to start' if stable else 'Waiting for stable PV export'
-                        if self.options['pv_charge_auto'] and self.clock() - self.stable_since >= self.options['pv_charge_dwell_s']:
+                        if self.options['pv_charge_auto'] and not self.unmonitored_test and self.clock() - self.stable_since >= self.options['pv_charge_dwell_s']:
                             try:
                                 await self._start()
                             except Exception as err:

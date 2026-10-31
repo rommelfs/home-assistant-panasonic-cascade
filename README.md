@@ -2,7 +2,7 @@
 
 Experimental custom integration for the local FIN/Haystack API used by the Panasonic Cascade Control web interface (`panCascadeControlExt`).
 
-The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.11.0** adds opt-in temporary PV buffer charging with persisted restoration, measurement guards, optional automatic start and dashboard history. The supported offset remains 0–10 °C; the stop limit up to 75 °C is not an absolute buffer target. Automatic session recovery, the curve-loading fix and configurable 200 W cycling estimates remain available. Hardware writes have not yet been verified on a real installation.
+The integration provides username/password authentication, project and installation selection, sensors, optional controls, dashboards, and alarm notifications. Version **0.11.0** adds opt-in temporary PV buffer charging with persisted restoration, measurement guards, optional automatic start and dashboard history. The supported offset remains 0–10 °C; the stop limit up to 75 °C is not an absolute buffer target. Automatic session recovery, the curve-loading fix and configurable 200 W cycling estimates remain available. Version **0.11.1** adds an explicitly selected manual hardware test without a buffer sensor, limited to five minutes and at most 2 °C additional offset; temperature cutoff is absent in this test. Hardware writes have not yet been verified on a real installation.
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 

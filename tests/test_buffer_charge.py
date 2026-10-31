@@ -252,6 +252,71 @@ class ChargeTest(unittest.IsolatedAsyncioTestCase):
         gate.set();await asyncio.gather(*self.m.tasks)
         self.assertIsNone(self.m.lease);self.assertEqual(self.writes,[7,2])
 
+
+    async def test_sensorless_test_caps_duration_and_relative_raise_and_restores(self):
+        self.options['pv_charge_test_without_temperature']=True
+        del self.states['sensor.temperature']
+        await self.begin(offset=10,duration=120)
+        self.assertEqual(self.writes,[4])
+        self.assertEqual(self.m.lease['expires'],self.t+300)
+        self.assertTrue(self.store.data['lease']['temperature_unmonitored_test'])
+        from custom_components.panasonic_cascade.charge_entities import BufferChargeSensor
+        entity=BufferChargeSensor(self.c)
+        self.assertEqual(entity.native_value,'Ladetest ohne Temperaturüberwachung')
+        self.assertTrue(entity.extra_state_attributes['temperature_unmonitored_test'])
+        self.assertIsNone(entity.extra_state_attributes['temperature_limit'])
+        self.assertIsNone(entity.extra_state_attributes['buffer_temperature'])
+        self.advance(301);del self.states['sensor.temperature']
+        await self.m.async_tick()
+        self.assertEqual(self.writes,[4,2]);self.assertIsNone(self.m.lease)
+
+    async def test_sensorless_test_never_auto_starts_or_repeats(self):
+        self.options.update(pv_charge_test_without_temperature=True,pv_charge_auto=True)
+        del self.states['sensor.temperature']
+        await self.m.async_tick();self.advance(121);await self.m.async_tick()
+        self.assertEqual(self.writes,[])
+        with self.assertRaises(HomeAssistantError):await self.begin()
+        self.options['pv_charge_auto']=False
+        await self.begin();await self.m.async_stop();self.advance(121);await self.m.async_tick()
+        self.assertEqual(self.writes,[4,2])
+
+    async def test_sensorless_test_keeps_all_power_and_freshness_guards(self):
+        self.options['pv_charge_test_without_temperature']=True
+        for key,bad in [('export','-1'),('battery','101'),('pv','0'),('pv','unknown')]:
+            self.refresh();del self.states['sensor.temperature']
+            self.states['sensor.'+key].state=bad
+            with self.assertRaises(HomeAssistantError):await self.begin()
+        self.refresh();del self.states['sensor.temperature'];self.t+=61
+        with self.assertRaises(HomeAssistantError):await self.begin()
+        self.assertEqual(self.writes,[])
+        self.refresh();del self.states['sensor.temperature'];await self.begin()
+        self.states['sensor.battery'].state='500';await self.m.async_tick()
+        self.assertEqual(self.writes,[4,2])
+
+    async def test_sensorless_test_does_not_weaken_existing_normal_charge(self):
+        await self.begin();self.options['pv_charge_test_without_temperature']=True
+        self.states['sensor.temperature'].state='75'
+        await self.m.async_tick();self.assertEqual(self.writes,[7,2])
+
+    async def test_sensorless_test_revocation_and_restart_restore(self):
+        self.options['pv_charge_test_without_temperature']=True
+        await self.begin();self.options['pv_charge_test_without_temperature']=False
+        await self.m.async_tick();self.assertEqual(self.writes,[4,2])
+        self.options['pv_charge_test_without_temperature']=True
+        await self.begin();del self.states['sensor.temperature']
+        new=charge.BufferCharge(self.c,self.store,clock=lambda:self.t)
+        await new.async_initialize();self.assertIsNone(new.lease)
+        self.assertEqual(self.writes,[4,2,4,2])
+
+    async def test_sensorless_test_respects_live_upper_bound(self):
+        self.options['pv_charge_test_without_temperature']=True
+        self.row['maxVal']=zinc.Number(3,'°C')
+        await self.begin();self.assertEqual(self.writes,[3])
+        await self.m.async_stop()
+        self.row['maxVal']=zinc.Number(2,'°C')
+        with self.assertRaises(HomeAssistantError):await self.begin()
+        self.assertEqual(self.writes,[3,2])
+
 class ChargeOptionsAndDashboardTest(unittest.IsolatedAsyncioTestCase):
     async def test_configuration_defaults_sources_confirmation_hysteresis_and_limit(self):
         from custom_components.panasonic_cascade.config_flow import CascadeOptionsFlow
@@ -277,6 +342,22 @@ class ChargeOptionsAndDashboardTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bad['errors']['base'],'pv_charge_thresholds')
         good=await f.async_step_pv_charge(values)
         self.assertEqual(good['type'],'create_entry');self.assertTrue(good['data']['enable_controls'])
+
+    async def test_sensorless_options_allow_only_missing_temperature_and_manual_start(self):
+        from custom_components.panasonic_cascade.config_flow import CascadeOptionsFlow
+        f=CascadeOptionsFlow();f.handler='entry';f.hass=Mock()
+        f.hass.config_entries.async_get_known_entry.return_value=SimpleNamespace(data={},options={'enable_controls':True})
+        values={**charge.DEFAULTS,'pv_charge_enabled':True,'pv_charge_confirmed':True,
+                'pv_charge_test_without_temperature':True}
+        for k in ('export','battery','pv'):values[f'pv_charge_{k}_sensor']='sensor.'+k
+        result=await f.async_step_pv_charge(values)
+        self.assertEqual(result['type'],'create_entry')
+        bad=await f.async_step_pv_charge({**values,'pv_charge_auto':True})
+        self.assertEqual(bad['errors']['base'],'pv_charge_test_manual_only')
+        bad=await f.async_step_pv_charge({**values,'pv_charge_battery_sensor':''})
+        self.assertEqual(bad['errors']['base'],'pv_charge_missing_sources')
+        bad=await f.async_step_pv_charge({**values,'pv_charge_test_without_temperature':False})
+        self.assertEqual(bad['errors']['base'],'pv_charge_missing_sources')
 
     def test_prominent_active_fault_cards_and_24h_7day_history_preserve_existing_graphs(self):
         from test_controls_dashboard import DashboardTest,dashboard

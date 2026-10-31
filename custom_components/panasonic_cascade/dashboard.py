@@ -263,7 +263,7 @@ def build_dashboard(hass, entry_id=None):
         entity_id = row['entity']
         active = {'type':'conditional','conditions':[{'entity':binary,'state':'on'}],
                   'card':{'type':'markdown','title':'☀️ PV-Pufferladung aktiv',
-                          'content':"**Die Pufferladung ist freigegeben.**\n\nRestzeit: **{{ state_attr('"+entity_id+"','remaining_minutes') }} min** · Versatz: **{{ state_attr('"+entity_id+"','requested_offset') }} °C**\n\nDie Rückstellung auf den vorherigen Versatz erfolgt beim Beenden automatisch, sobald der Regler erreichbar ist."}}
+                          'content':"{% if state_attr('"+entity_id+"','temperature_unmonitored_test') %}**⚠️ Ladetest OHNE Temperaturüberwachung — höchstens 5 Minuten, maximal +2 °C zusätzlicher Versatz.**{% else %}**Die Pufferladung ist freigegeben.**{% endif %}\n\nRestzeit: **{{ state_attr('"+entity_id+"','remaining_minutes') }} min** · Versatz: **{{ state_attr('"+entity_id+"','requested_offset') }} °C**\n\nDie Rückstellung auf den vorherigen Versatz erfolgt beim Beenden automatisch, sobald der Regler erreichbar ist."}}
         fault = {'type':'conditional','conditions':[{'condition':'or','conditions':[
                     {'condition':'state','entity':entity_id,'state':'Rückstellung ausstehend'},
                     {'condition':'state','entity':entity_id,'state':'Externe Änderung'}]}],

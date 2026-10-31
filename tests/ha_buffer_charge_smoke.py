@@ -48,6 +48,21 @@ async def main():
   assert writes==[7,2],writes
   assert any(s.state=='off' for s in hass.states.async_all('binary_sensor') if 'pv_pufferladung' in s.entity_id)
   assert entry.runtime_data.buffer_charge.lease is None
+  # Explicit sensorless test, through real HA services; automatic start remains off.
+  hass.config_entries.async_update_entry(entry,options={**dict(entry.options),
+    'pv_charge_test_without_temperature':True,'pv_charge_temperature_sensor':''})
+  await hass.async_block_till_done()
+  hass.states.async_remove('sensor.test_temperature')
+  manager=entry.runtime_data.buffer_charge;manager.stable_since=manager.clock()-121
+  await hass.services.async_call('panasonic_cascade','start_buffer_charge',
+    {'entry_id':entry.entry_id,'offset':10,'duration_minutes':120},blocking=True)
+  assert writes==[7,2,4],writes
+  assert manager.lease['temperature_unmonitored_test'] is True
+  assert 0 < manager.lease['expires']-manager.clock() <= 300
+  await hass.async_block_till_done()
+  assert any(s.state=='Ladetest ohne Temperaturüberwachung' for s in hass.states.async_all('sensor'))
+  await hass.services.async_call('panasonic_cascade','stop_buffer_charge',{'entry_id':entry.entry_id},blocking=True)
+  assert writes==[7,2,4,2],writes
   assert await hass.config_entries.async_unload(entry.entry_id)
   await hass.async_stop(force=True)
   print('SERVICE_START_RELOAD_RESTORE_AND_UNLOAD_OK',writes)

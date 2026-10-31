@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.11.1](docs/releases/v0.11.1.md)
+
+- Add an explicitly opted-in sensorless hardware charge test: manual only, maximum five minutes and at most 2 °C additional offset within verified controller bounds.
+- Retain grid/battery/PV freshness and surplus guards, durable original-offset restoration and restart recovery. Normal charging still requires actual buffer temperature.
+- Clearly label test operation and absent temperature cutoff in status/dashboard; reject automatic starts in test mode.
+
 ## [0.11.0](docs/releases/v0.11.0.md)
 
 - Add an opt-in cascade buffer offset, bounded to 0–10 °C and live controller limits; preserve existing point identities.
