@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.13.0](docs/releases/v0.13.0.md)
+
+- Renew healthy automatic PV charging before its block expires, without restoring and reapplying the offset.
+- Add a 30-minute minimum request hold, a two-minute low-margin debounce and a persisted ten-minute automatic restart cooldown.
+- Retain immediate temperature, freshness, import, discharge and battery-reserve guards; manual charges/tests retain fixed deadlines.
+
 ## [0.12.2](docs/releases/v0.12.2.md)
 
 - Refresh measurements, native temperature report diagnostics, effective offsets and remaining duration during active PV charging.

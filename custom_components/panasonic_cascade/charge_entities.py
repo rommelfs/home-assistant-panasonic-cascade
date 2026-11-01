@@ -77,7 +77,11 @@ class BufferChargeSensor(ChargeEntity, SensorEntity):
                 'unmonitored_test_configured':manager.unmonitored_test,
                 'remaining_minutes':round(max(0,lease.get('expires',0)-manager.clock())/60,1) if lease else 0,
                 'expires_at':datetime.fromtimestamp(lease['expires'],UTC).isoformat() if lease else None,
-                'automatic':manager.options['pv_charge_auto'], 'restoration_pending':bool(lease and lease['phase']!='charging')}
+                'automatic':manager.options['pv_charge_auto'],
+                'continuous_automatic_charge':bool(lease.get('automatic') and manager.options['pv_charge_auto']),
+                'extension_count':lease.get('extensions', 0),
+                'minimum_hold_remaining_minutes':round(max(0,lease.get('minimum_until',0)-manager.clock())/60,1),
+                'restart_cooldown_minutes':round(max(0,manager.restart_not_before-manager.clock())/60,1), 'restoration_pending':bool(lease and lease['phase']!='charging')}
 
 
 class BufferChargeButton(ChargeEntity, ButtonEntity):

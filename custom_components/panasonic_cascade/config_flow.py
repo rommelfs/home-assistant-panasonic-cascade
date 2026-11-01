@@ -212,6 +212,9 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             ('pv_charge_grid_tolerance_w', 0, 100, 5, 'W'),
             ('pv_charge_start_w', 100, 30000, 100, 'W'), ('pv_charge_stop_w', 0, 29900, 100, 'W'),
             ('pv_charge_dwell_s', 15, 600, 15, 's'), ('pv_charge_offset', 1, 10, 1, '°C'),
+            ('pv_charge_min_hold_min', 10, 120, 5, 'min'),
+            ('pv_charge_stop_delay_s', 15, 600, 15, 's'),
+            ('pv_charge_restart_delay_min', 1, 60, 1, 'min'),
             ('pv_charge_duration_min', 1, 120, 1, 'min'), ('pv_charge_max_c', 20, 75, 1, '°C'),
             ('pv_charge_max_age_s', 15, 300, 15, 's')):
             fields[vol.Required(key, default=d[key])] = selector.NumberSelector(selector.NumberSelectorConfig(

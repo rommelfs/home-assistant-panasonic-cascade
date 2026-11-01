@@ -27,6 +27,8 @@ DEFAULTS = {
     'pv_charge_start_w': 1500, 'pv_charge_stop_w': 500, 'pv_charge_dwell_s': 120,
     'pv_charge_offset': 5, 'pv_charge_duration_min': 30, 'pv_charge_max_c': 75,
     'pv_charge_max_age_s': 60,
+    'pv_charge_min_hold_min': 30, 'pv_charge_stop_delay_s': 120,
+    'pv_charge_restart_delay_min': 10,
 }
 SOURCE_KEYS = ('export', 'battery', 'pv', 'temperature')
 
@@ -106,6 +108,8 @@ class BufferCharge:
         self.stable_since = None
         self.last_restore_attempt = -math.inf
         self.last_verify = -math.inf
+        self.low_surplus_since = None
+        self.restart_not_before = 0
         self.unsub, self.tasks = [], set()
         self.deadline_cancel = None
         self.closed = False
@@ -127,12 +131,13 @@ class BufferCharge:
         async_dispatcher_send(self.hass, self.signal)
 
     async def save(self):
-        await self.store.async_save({'lease': self.lease, 'reason': self.reason})
+        await self.store.async_save({'lease': self.lease, 'reason': self.reason, 'restart_not_before': self.restart_not_before})
 
     async def async_initialize(self):
         saved = await self.store.async_load() or {}
         self.lease = saved.get('lease')
         self.reason = saved.get('reason', '')
+        self.restart_not_before = saved.get('restart_not_before', 0)
         if self.lease:
             # Never resume or extend a raised offset after restart/reload.
             async with self.lock:
@@ -194,7 +199,7 @@ class BufferCharge:
         async with self.lock:
             await self._start(offset, duration)
 
-    async def _start(self, offset=None, duration=None):
+    async def _start(self, offset=None, duration=None, *, automatic=False):
         if self.closed or not self.configured():
             raise HomeAssistantError('Configure and enable PV charging, measurement signs and temperature/hydraulic verification first')
         if self.lease:
@@ -202,6 +207,8 @@ class BufferCharge:
         o = self.options
         testing = self.unmonitored_test
         try:
+            if automatic and self.clock() < self.restart_not_before:
+                raise ValueError('Automatic restart cooldown is active')
             if testing and o['pv_charge_auto']:
                 raise ValueError('Unmonitored charge tests require automatic start to be off')
             offset = finite(o['pv_charge_offset'] if offset is None else offset)
@@ -232,7 +239,13 @@ class BufferCharge:
                 raise ValueError('PV charging conditions changed')
         except (ApiError, AuthError, ValueError, TypeError) as err:
             raise HomeAssistantError(str(err)) from err
-        self.lease = {'point': ident, 'baseline': baseline, 'applied': offset,
+        if automatic:
+            duration = max(duration, finite(o['pv_charge_min_hold_min']))
+        self.low_surplus_since = None
+        self.lease = {'automatic': automatic, 'started': self.clock(),
+                      'block_seconds': duration * 60,
+                      'minimum_until': self.clock() + finite(o['pv_charge_min_hold_min']) * 60 if automatic else self.clock(),
+                      'extensions': 0, 'point': ident, 'baseline': baseline, 'applied': offset,
                       'expires': self.clock() + duration * 60, 'phase': 'applying',
                       'temperature_unmonitored_test': testing}
         self.reason = ''
@@ -257,8 +270,7 @@ class BufferCharge:
             self.last_verify = self.clock()
             self.lease['phase'] = 'charging'
             await self.save()
-            self.deadline_cancel = async_track_point_in_utc_time(
-                self.hass, self._deadline, datetime.fromtimestamp(self.lease['expires'], UTC))
+            self._schedule_deadline()
         except Exception as err:
             self.reason = f'Application could not be confirmed: {type(err).__name__}'
             await self._restore(self.reason)
@@ -266,15 +278,41 @@ class BufferCharge:
         finally:
             self.changed()
 
+    def _schedule_deadline(self):
+        if self.deadline_cancel:
+            self.deadline_cancel()
+        self.deadline_cancel = async_track_point_in_utc_time(
+            self.hass, self._deadline, datetime.fromtimestamp(self.lease['expires'], UTC))
+
     async def _deadline(self, _now):
-        self.deadline_cancel = None
-        await self.async_stop('Charge duration expired')
+        # The same guarded decision as regular ticks; never blindly stop a
+        # healthy automatic charge at a block boundary.
+        await self.async_tick()
+
+    async def _extend(self, until=None):
+        previous = dict(self.lease)
+        self.lease = {**previous, 'expires': until if until is not None else max(self.clock(), previous['expires']) + previous['block_seconds'],
+                      'extensions': previous['extensions'] + (until is None)}
+        try:
+            # Renew recovery intent without another controller write or any
+            # intermediate baseline restoration. A failed save ends the charge.
+            await self.save()
+        except Exception:
+            self.lease = previous
+            raise
+        self._schedule_deadline()
+
 
     async def _clear(self, reason):
         if self.deadline_cancel:
             self.deadline_cancel()
             self.deadline_cancel = None
-        await self.store.async_save({'lease': None, 'reason': reason})
+        restart_not_before = self.restart_not_before
+        if self.lease and self.lease.get('automatic'):
+            restart_not_before = self.clock() + finite(self.options['pv_charge_restart_delay_min']) * 60
+        await self.store.async_save({'lease': None, 'reason': reason, 'restart_not_before': restart_not_before})
+        self.restart_not_before = restart_not_before
+        self.low_surplus_since = None
         self.lease = None
         self.reason, self.status, self.stable_since = reason, 'idle', None
         self.changed()
@@ -352,12 +390,23 @@ class BufferCharge:
                         reason = 'PV charging disabled'
                     elif self.lease.get('temperature_unmonitored_test') and (not self.unmonitored_test or self.options['pv_charge_auto']):
                         reason = 'Manual unmonitored test permission removed'
-                    elif self.clock() >= self.lease['expires']:
-                        reason = 'Charge duration expired'
                     elif not self.c.last_update_success:
                         reason = 'Controller connection lost'
-                    elif self.readings()['available'] < self.options['pv_charge_stop_w']:
-                        reason = 'PV surplus below stop threshold after battery reserve'
+                    else:
+                        data = self.readings()  # Hard guards always win, including during a hold.
+                        automatic = self.lease.get('automatic') and self.options['pv_charge_auto']
+                        low = data['available'] < self.options['pv_charge_stop_w']
+                        if low:
+                            if self.low_surplus_since is None:
+                                self.low_surplus_since = self.clock()
+                            # A low positive margin may be buffered, but a spent
+                            # battery reserve is not a cloud-grace allowance.
+                            if (not automatic or data['available'] < 0 or
+                                (self.clock() >= self.lease['minimum_until'] and
+                                 self.clock() - self.low_surplus_since >= self.options['pv_charge_stop_delay_s'])):
+                                reason = 'PV surplus below stop threshold after battery reserve'
+                        else:
+                            self.low_surplus_since = None
                     if reason is None and self.clock() - self.last_verify >= 15:
                         await self.heating_mode()
                         row = await self.fresh(self.lease['point'])
@@ -365,6 +414,22 @@ class BufferCharge:
                         if value(row['writeDef']) != self.lease['applied']:
                             reason = 'Controller offset changed'
                         self.last_verify = self.clock()
+                    if reason is None:
+                        remaining = self.lease['expires'] - self.clock()
+                        if automatic and not low and remaining <= min(300, self.lease['block_seconds'] / 2):
+                            await self._extend()
+                            self.reason = 'Automatic charge extended without interruption'
+                        elif remaining <= 0:
+                            grace_until = (self.low_surplus_since or self.clock()) + self.options['pv_charge_stop_delay_s']
+                            if automatic and low and self.clock() < grace_until:
+                                await self._extend(until=grace_until)
+                                self.reason = 'Brief low surplus margin at block boundary; evaluating recovery'
+                            else:
+                                reason = 'Charge duration expired'
+                        elif low:
+                            self.reason = 'Holding charge request through a low surplus margin; reserve still available'
+                        else:
+                            self.reason = 'Automatic charging; continuously checking conditions' if automatic else ''
                 except Exception as err:
                     reason = str(err)
                 if reason:
@@ -378,7 +443,9 @@ class BufferCharge:
                     if not self.c.last_update_success:
                         raise ValueError('Controller data is unavailable')
                     data = self.readings()
-                    if data['available'] < self.options['pv_charge_start_w']:
+                    if self.clock() < self.restart_not_before and self.options['pv_charge_auto']:
+                        self.status, self.reason, self.stable_since = 'waiting', 'Automatic restart cooldown is active', None
+                    elif data['available'] < self.options['pv_charge_start_w']:
                         self.status, self.reason, self.stable_since = 'waiting', 'Waiting for PV surplus after battery reserve', None
                     else:
                         if self.stable_since is None:
@@ -388,7 +455,7 @@ class BufferCharge:
                         self.reason = 'Stable PV surplus; ready to start' if stable else 'Waiting for stable PV surplus'
                         if self.options['pv_charge_auto'] and not self.unmonitored_test and self.clock() - self.stable_since >= self.options['pv_charge_dwell_s']:
                             try:
-                                await self._start()
+                                await self._start(automatic=True)
                             except Exception as err:
                                 self.status, self.reason = 'blocked', str(err)
                                 self.stable_since = None

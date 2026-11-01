@@ -246,7 +246,9 @@ def build_dashboard(hass, entry_id=None):
                                           ('battery_reserve_w','Batteriereserve','W'), ('baseline_offset','Vorheriger Versatz','°C'), ('requested_offset','Temporärer Versatz','°C'),
                                           ('effective_offset','Wirksamer Versatz','°C'), ('zone_target','Zone Soll','°C'),
                                           ('buffer_target','Puffer Soll','°C'), ('buffer_temperature','Puffer Ist','°C'),
-                                          ('temperature_limit','Abschaltgrenze','°C'), ('remaining_minutes','Restzeit','min')]:
+                                          ('temperature_limit','Abschaltgrenze','°C'), ('remaining_minutes','Aktueller Ladeblock','min'),
+                                          ('minimum_hold_remaining_minutes','Mindesthaltezeit verbleibend','min'),
+                                          ('restart_cooldown_minutes','Wiederanlaufsperre','min')]:
                 content += label + ": {{ state_attr('" + entity_id + "','" + attribute + "') if state_attr('" + entity_id + "','" + attribute + "') is not none else '—' }} " + unit + "  \n"
             content += "\nDie Abschaltgrenze bis 75 °C ist kein absoluter Puffersollwert. Der bestätigte Versatz beträgt höchstens 10 °C."
             settings['cards'].insert(1, {'type':'markdown','title':'PV-Ladung · Rückstellung und Messwerte','content':content})
@@ -264,7 +266,7 @@ def build_dashboard(hass, entry_id=None):
         entity_id = row['entity']
         active = {'type':'conditional','conditions':[{'entity':binary,'state':'on'}],
                   'card':{'type':'markdown','title':'☀️ PV-Pufferladung aktiv',
-                          'content':"{% if state_attr('"+entity_id+"','temperature_unmonitored_test') %}**⚠️ Ladetest OHNE Temperaturüberwachung — höchstens 5 Minuten, maximal +2 °C zusätzlicher Versatz.**{% else %}**Die Pufferladung ist freigegeben.**{% endif %}\n\nRestzeit: **{{ state_attr('"+entity_id+"','remaining_minutes') }} min** · Versatz: **{{ state_attr('"+entity_id+"','requested_offset') }} °C**\n\nDie Rückstellung auf den vorherigen Versatz erfolgt beim Beenden automatisch, sobald der Regler erreichbar ist."}}
+                          'content':"{% if state_attr('"+entity_id+"','temperature_unmonitored_test') %}**⚠️ Ladetest OHNE Temperaturüberwachung — höchstens 5 Minuten, maximal +2 °C zusätzlicher Versatz.**{% else %}**Die Pufferladung ist freigegeben.**{% endif %}\n\n{% if state_attr('"+entity_id+"','continuous_automatic_charge') %}Automatik verlängert bei passenden Messwerten ohne Unterbrechung. Aktueller Ladeblock: {% else %}Restzeit: {% endif %}**{{ state_attr('"+entity_id+"','remaining_minutes') }} min** · Versatz: **{{ state_attr('"+entity_id+"','requested_offset') }} °C**\n\nDie Rückstellung auf den vorherigen Versatz erfolgt beim Beenden automatisch, sobald der Regler erreichbar ist."}}
         fault = {'type':'conditional','conditions':[{'condition':'or','conditions':[
                     {'condition':'state','entity':entity_id,'state':'Rückstellung ausstehend'},
                     {'condition':'state','entity':entity_id,'state':'Externe Änderung'}]}],

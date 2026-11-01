@@ -477,3 +477,199 @@ class ActiveStatusTest(unittest.IsolatedAsyncioTestCase):
             changed.assert_called_once()
         self.assertEqual(self.writes, [7])
         self.assertEqual(self.m.lease['phase'], 'charging')
+
+
+class ContinuousAutomaticChargeTest(unittest.IsolatedAsyncioTestCase):
+    setUp = ChargeTest.setUp
+    refresh = ChargeTest.refresh
+    advance = ChargeTest.advance
+
+    async def start_auto(self):
+        self.options.update(pv_charge_auto=True, pv_charge_heat_pump_priority=True)
+        self.m.stable_since = self.t - 120
+        await self.m._start(automatic=True)
+
+    async def test_renew_before_boundary_without_restore_or_second_device_write(self):
+        await self.start_auto()
+        original_expiry = self.m.lease['expires']
+        self.advance(25 * 60)
+        await self.m.async_tick()
+        self.assertEqual(self.m.lease['expires'], original_expiry + 30 * 60)
+        self.assertEqual(self.store.data['lease']['expires'], self.m.lease['expires'])
+        self.assertEqual(self.m.lease['extensions'], 1)
+        self.assertEqual(self.writes, [5])
+        self.advance(5 * 60)
+        await self.m._deadline(None)
+        self.assertEqual(self.writes, [5])
+        self.assertEqual(self.m.lease['phase'], 'charging')
+
+    async def test_successive_extensions_keep_original_baseline_and_no_off_on_pair(self):
+        await self.start_auto()
+        for seconds in [1500, 1800, 1800]:
+            self.advance(seconds)
+            await self.m.async_tick()
+        self.assertEqual(self.m.lease['extensions'], 3)
+        self.assertEqual(self.m.lease['baseline'], 2)
+        self.assertEqual(self.writes, [5])
+        await self.m.async_stop()
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_low_positive_margin_holds_request_for_30_minutes(self):
+        await self.start_auto()
+        self.advance(60)
+        self.states['sensor.export'].state = '1200'  # 200 W beyond reserve.
+        await self.m.async_tick()
+        self.advance(28 * 60)
+        self.states['sensor.export'].state = '1200'
+        await self.m.async_tick()
+        self.assertEqual(self.writes, [5])
+        self.advance(60)
+        self.states['sensor.export'].state = '1200'
+        await self.m.async_tick()
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_short_low_margin_recovers_and_timer_resets(self):
+        await self.start_auto()
+        self.advance(31 * 60)
+        await self.m.async_tick()  # Healthy feedback renews the current block.
+        for _ in range(2):
+            self.states['sensor.export'].state = '1200'
+            await self.m.async_tick()
+            self.advance(119)
+            self.states['sensor.export'].state = '1200'
+            await self.m.async_tick()
+            self.assertIsNotNone(self.m.lease)
+            self.refresh()
+            await self.m.async_tick()
+            self.assertIsNone(self.m.low_surplus_since)
+        self.assertEqual(self.writes, [5])
+
+    async def test_continuous_low_margin_stops_after_debounce_outside_hold(self):
+        await self.start_auto()
+        self.advance(31 * 60)
+        await self.m.async_tick()
+        self.states['sensor.export'].state = '1200'
+        await self.m.async_tick()
+        self.advance(120)
+        self.states['sensor.export'].state = '1200'
+        await self.m.async_tick()
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_low_margin_at_boundary_does_not_grant_another_full_block(self):
+        await self.start_auto()
+        self.advance(30 * 60)
+        self.states['sensor.export'].state = '1200'
+        await self.m._deadline(None)
+        self.assertIsNotNone(self.m.lease)
+        self.assertEqual(self.m.lease['extensions'], 0)
+        self.assertEqual(self.writes, [5])
+        self.advance(120)
+        self.states['sensor.export'].state = '1200'
+        await self.m._deadline(None)
+        self.assertIsNone(self.m.lease)
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_all_hard_guards_override_minimum_hold_and_renewal(self):
+        for key, raw in [('export', '-51'), ('battery', '101'), ('pv', '0'),
+                         ('temperature', '75'), ('temperature', 'unknown'), ('export', '900')]:
+            self.advance(720)
+            await self.start_auto()
+            self.states['sensor.' + key].state = raw
+            await self.m.async_tick()
+            self.assertIsNone(self.m.lease, (key, raw))
+        self.assertEqual(self.writes, [5, 2] * 6)
+
+    async def test_stale_temperature_at_renewal_restores_instead(self):
+        await self.start_auto()
+        self.advance(25 * 60)
+        self.states['sensor.temperature'].last_reported = datetime.fromtimestamp(self.t - 61, UTC)
+        await self.m.async_tick()
+        self.assertIsNone(self.m.lease)
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_manual_charge_keeps_hard_expiry_even_with_auto_option(self):
+        self.options['pv_charge_auto'] = True
+        self.m.stable_since = self.t - 120
+        await self.m.async_start(7, 1)
+        self.advance(61)
+        await self.m._deadline(None)
+        self.assertIsNone(self.m.lease)
+        self.assertEqual(self.writes, [7, 2])
+
+    async def test_renewal_storage_failure_requests_restoration(self):
+        await self.start_auto()
+        original = self.m.lease['expires']
+        self.store.fail = True
+        self.advance(25 * 60)
+        await self.m.async_tick()
+        self.assertEqual(self.m.lease['expires'], original)
+        self.assertEqual(self.m.lease['phase'], 'restore_pending')
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_restart_cooldown_is_persisted_and_requires_new_stable_surplus(self):
+        await self.start_auto()
+        await self.m.async_stop()
+        until = self.m.restart_not_before
+        self.assertEqual(until, self.t + 600)
+        new = charge.BufferCharge(self.c, self.store, clock=lambda: self.t)
+        await new.async_initialize()
+        self.assertEqual(new.restart_not_before, until)
+        self.advance(599)
+        await new.async_tick()
+        self.assertIsNone(new.stable_since)
+        self.assertEqual(self.writes, [5, 2])
+        self.advance(1)
+        await new.async_tick()
+        self.advance(119)
+        await new.async_tick()
+        self.assertEqual(self.writes, [5, 2])
+        self.advance(1)
+        await new.async_tick()
+        self.assertEqual(self.writes, [5, 2, 5])
+
+    async def test_reload_restores_renewed_lease_and_does_not_restart_immediately(self):
+        await self.start_auto()
+        self.advance(25 * 60)
+        await self.m.async_tick()
+        new = charge.BufferCharge(self.c, self.store, clock=lambda: self.t)
+        await new.async_initialize()
+        self.assertIsNone(new.lease)
+        self.assertGreater(new.restart_not_before, self.t)
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_disabling_auto_prevents_any_more_extensions(self):
+        await self.start_auto()
+        self.options['pv_charge_auto'] = False
+        self.advance(25 * 60)
+        await self.m.async_tick()
+        self.assertEqual(self.m.lease['extensions'], 0)
+        self.advance(5 * 60)
+        await self.m._deadline(None)
+        self.assertIsNone(self.m.lease)
+        self.assertEqual(self.writes, [5, 2])
+
+    async def test_manual_stop_overrides_hold_and_status_exposes_request_timers(self):
+        await self.start_auto()
+        from custom_components.panasonic_cascade.charge_entities import BufferChargeSensor
+        attrs = BufferChargeSensor(self.c).extra_state_attributes
+        self.assertTrue(attrs['continuous_automatic_charge'])
+        self.assertEqual(attrs['minimum_hold_remaining_minutes'], 30)
+        self.assertEqual(attrs['extension_count'], 0)
+        await self.m.async_stop()
+        self.assertEqual(self.writes, [5, 2])
+        self.assertEqual(BufferChargeSensor(self.c).extra_state_attributes['restart_cooldown_minutes'], 10)
+
+    async def test_external_offset_at_renewal_is_preserved_as_conflict(self):
+        await self.start_auto()
+        self.advance(25 * 60)
+        self.row.update(writeDef=zinc.Number(4, '°C'), curVal=zinc.Number(4, '°C'))
+        await self.m.async_tick()
+        self.assertEqual(self.m.lease['phase'], 'conflict')
+        self.assertEqual(self.m.lease['extensions'], 0)
+        self.assertEqual(self.writes, [5])
+
+    async def test_short_configured_auto_block_does_not_shorten_minimum_hold(self):
+        self.options['pv_charge_duration_min'] = 1
+        await self.start_auto()
+        self.assertEqual(self.m.lease['expires'] - self.t, 30 * 60)
+        self.assertEqual(self.m.lease['minimum_until'] - self.t, 30 * 60)

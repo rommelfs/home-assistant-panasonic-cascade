@@ -2,6 +2,20 @@
 
 Available in **0.11.0**, disabled by default. This is a temporary controller offset with a persisted restoration record, not a separate thermostat or an immersion-heater controller.
 
+## Continuous automatic charging and cycling protection (0.13.0)
+
+Automatic starts create a renewable charge request. Five minutes before the current block ends, fresh valid measurements and surplus at or above the stop threshold allow another block to be added. The default block is 30 minutes; automatic blocks cannot be shorter than the configured minimum hold. The original offset stays applied throughout: renewal only saves the new recovery deadline, with no restore/reapply commands. Repeated renewals can continue while conditions remain suitable; this is reactive control, not a weather forecast or a guarantee of the next 30 minutes of PV production.
+
+Defaults, configurable in the PV charge options:
+
+- **Minimum request hold: 30 minutes.** During this period, a small nonnegative surplus margin below the stop threshold does not by itself end automatic charging.
+- **Low-margin delay: 120 seconds.** After the hold, a continuous low margin must last this long to end charging. Recovery resets the timer. A brief dip at a block boundary receives only the remaining debounce time, not a fresh full block.
+- **Automatic restart cooldown: 10 minutes.** After restoration completes, another automatic start must wait for the persisted cooldown and then a new full stable-surplus interval. Reloading/restarting HA does not bypass it. Explicit manual starts remain available and use their fixed deadline.
+
+**The hold is subordinate to all existing guards.** Temperature limit, missing/stale/invalid feedback, PV loss, grid import beyond tolerance, battery discharge, a negative available budget (battery reserve no longer covered), loss of heating mode/controller feedback, external offset changes, disabling charging or manual stop still request immediate restoration. No additional battery discharge or grid-import allowance is introduced to force a minimum runtime. This can shorten a charge during a real power deficit.
+
+The hold starts when the integration raises the request; it is **not a measured or guaranteed 30-minute compressor runtime**. Panasonic retains control of its compressors and may stop them earlier. Both units' existing power-based cycling estimates remain estimates, separate from the charge request. The dashboard shows the current renewable block, remaining request hold and automatic restart cooldown. Manual charge actions (even with automatic mode enabled) and sensorless hardware tests are never automatically extended. Switching automatic mode off prevents further renewals; the current charge keeps its already stored deadline and the normal guards.
+
 ## Supported temperature control
 
 The verified cascade buffer point is `_equip:buffer_point:tBufferTank`. Captured metadata advertises **0–10 °C**. This is an offset relative to the zone demand. A 31 °C zone demand and a 10 °C offset cannot command a 75 °C buffer target. The integration does not edit the heating curve, zone setpoint, SG Ready, or similarly named heat-pump feedback points to work around that limit.
@@ -14,10 +28,10 @@ The configurable **buffer temperature stop limit** is capped at **75 °C**. It i
 2. Open **Settings → Devices & services → Panasonic Cascade / Smart Edge → Configure**. Enable experimental controls, select **Configure temporary PV buffer charging**, and submit.
 3. Select four actual measurement sources: signed grid export/import, signed battery discharge/charge, PV production, and the buffer temperature at the hottest monitored point. Power sources must provide W or kW; the temperature source must provide °C.
 4. Set the sign conventions explicitly. Positive grid values can mean either export or import depending on the source. Similarly, configure whether positive battery values mean discharge. Do not infer PV surplus from an unverified power sensor or from battery-supported inverter output.
-5. Set start/stop export thresholds, stable-export time, maximum measurement age, temporary offset, maximum duration, and temperature stop limit. Defaults: start 1500 W, stop below 500 W, stable export 120 s, age 60 s, offset 5 °C, duration 30 minutes, temperature stop limit 75 °C. A raised offset must be greater than the current offset and remain within the live controller bounds.
+5. Set start/stop export thresholds, stable-export time, maximum measurement age, temporary offset, manual duration/automatic charge-block length, and temperature stop limit. Defaults: start 1500 W, stop below 500 W, stable export 120 s, age 60 s, offset 5 °C, duration 30 minutes, temperature stop limit 75 °C. A raised offset must be greater than the current offset and remain within the live controller bounds.
 6. Confirm that the source signs, hottest-point temperature feedback, permitted temperature and mixing circuit have been checked. Enable temporary charging only after this verification. **Automatic start is a separate option and defaults to off.**
 
-Sources must actually update often enough. Increasing the maximum age does not make a slow integration fast feedback. Missing, stale, non-finite or incorrectly dimensioned measurements block charging; they are never replaced with zero. No PV production, grid import, battery discharge above 100 W, leaving the cascade heating mode, or reaching the temperature limit ends a charge. Export falling below the stop threshold ends it as well. The conditions are checked on source state changes and at least every 15 seconds; a dedicated deadline callback also requests restoration at expiry. Physical device/network delays remain possible.
+Sources must actually update often enough. Increasing the maximum age does not make a slow integration fast feedback. Missing, stale, non-finite or incorrectly dimensioned measurements block charging; they are never replaced with zero. No PV production, grid import, battery discharge above 100 W, leaving the cascade heating mode, or reaching the temperature limit ends a charge. Manual charging also ends immediately when surplus falls below its stop threshold; automatic charging uses the hold/debounce policy above. The conditions are checked on source state changes and at least every 15 seconds; a dedicated deadline callback also checks whether restoration or an automatic renewal is required at expiry. Physical device/network delays remain possible.
 
 ## Heat-pump priority over battery charging (0.12.0)
 
@@ -31,7 +45,7 @@ Battery charging has a negative discharge value, so it contributes to available 
 
 The existing 1,500 W start and 500 W stop thresholds now apply to this available surplus, after the reserve. Start requires the full stable interval. Loss of available surplus requests original-offset restoration. No battery settings, charge limits, operating modes or grid export limits are changed.
 
-A priority-only **grid-import measurement tolerance** defaults to 50 W (configurable 0–100 W). It allows ordinary meter/regulator fluctuations such as 7 W around zero; import above it blocks/stops charging even if battery charging is high. Export-only mode retains strict no-import behavior. Sensor freshness, verified temperature, heating mode, lease expiry and restoration protections continue to apply.
+A priority-only **grid-import measurement tolerance** defaults to 50 W (configurable 0–100 W). It allows ordinary meter/regulator fluctuations such as 7 W around zero; import above it blocks/stops charging even if battery charging is high. Export-only mode retains strict no-import behavior. Sensor freshness, verified temperature, heating mode, guarded deadlines and restoration protections continue to apply.
 
 **This is a reactive heating-offset controller, not a power allocator.** It cannot modulate compressor electrical demand, guarantee exactly 1,000 W of battery charging, or prevent every brief import/discharge transient. It withdraws its offset when measurements fail the conditions; the original heating demand may still keep the heat pump running. It does not change battery priority in the inverter itself. Status/dashboard expose the calculated available surplus and configured battery reserve. Begin with a modest offset and verify actual power flows before relying on this priority policy.
 
