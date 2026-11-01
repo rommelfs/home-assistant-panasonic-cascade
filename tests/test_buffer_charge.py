@@ -462,3 +462,18 @@ class ChargeOptionsAndDashboardTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn(custom,updated['views'][0]['cards'])
         self.assertEqual(updated['views'][1],original['views'][1])
         self.assertEqual(updated,dashboard.merge_dashboard(updated,generated))
+
+
+class ActiveStatusTest(unittest.IsolatedAsyncioTestCase):
+    setUp = ChargeTest.setUp
+    refresh = ChargeTest.refresh
+    advance = ChargeTest.advance
+    begin = ChargeTest.begin
+    async def test_active_charge_refreshes_live_attributes_without_another_write(self):
+        await self.begin()
+        self.advance(15)
+        with patch.object(self.m, 'changed') as changed:
+            await self.m.async_tick()
+            changed.assert_called_once()
+        self.assertEqual(self.writes, [7])
+        self.assertEqual(self.m.lease['phase'], 'charging')

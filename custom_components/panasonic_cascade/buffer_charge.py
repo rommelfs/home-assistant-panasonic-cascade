@@ -369,6 +369,7 @@ class BufferCharge:
                     reason = str(err)
                 if reason:
                     await self._restore(reason)
+                self.changed()
                 return
             if not self.configured():
                 self.status, self.reason, self.stable_since = 'disabled', '', None

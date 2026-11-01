@@ -2,6 +2,11 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.12.2](docs/releases/v0.12.2.md)
+
+- Refresh measurements, native temperature report diagnostics, effective offsets and remaining duration during active PV charging.
+- Retain the existing hardware-write, restoration and measurement guards.
+
 ## [0.12.1](docs/releases/v0.12.1.md)
 
 - Observe genuine ESPHome temperature packets on the existing connection, including identical values suppressed by HA state deduplication.
