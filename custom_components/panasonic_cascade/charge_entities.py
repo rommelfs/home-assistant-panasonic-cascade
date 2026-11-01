@@ -65,6 +65,8 @@ class BufferChargeSensor(ChargeEntity, SensorEntity):
                 'effective_offset':value(offsets[0].get('curVal')) if len(offsets)==1 and offsets[0].get('curStatus')=='ok' else None,
                 'buffer_target':point('bufferSetpoint'), 'zone_target':point('zone1WaterTemperatureSetpoint'),
                 'buffer_temperature':measured.get('temperature'),
+                'temperature_native_packets':manager.temperature_reports.packet_count,
+                'temperature_native_report_age_s':round(manager.clock()-manager.temperature_reports.latest[1],1) if manager.temperature_reports.latest else None,
                 'heat_pump_priority':manager.options['pv_charge_heat_pump_priority'],
                 'battery_reserve_w':manager.options['pv_charge_battery_reserve_w'] if manager.options['pv_charge_heat_pump_priority'] else 0,
                 'available_surplus_w':round(measured['available']) if 'available' in measured else None,

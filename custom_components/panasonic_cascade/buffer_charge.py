@@ -16,6 +16,7 @@ from .const import DOMAIN
 from .api import ApiError, AuthError
 from .model import bounds, is_buffer_offset, model_key, validate_buffer_offset
 from .zinc import value
+from .temperature_reports import TemperatureReports
 
 DEFAULTS = {
     'pv_charge_enabled': False, 'pv_charge_auto': False, 'pv_charge_confirmed': False,
@@ -39,7 +40,7 @@ def finite(raw):
     return result
 
 
-def measurements(hass, options, now, *, unmonitored_test=False):
+def measurements(hass, options, now, *, unmonitored_test=False, temperature_sample=None):
     """Normalize explicit signed sources; unknown/stale data never become zero."""
     result = {}
     for key in SOURCE_KEYS:
@@ -50,11 +51,15 @@ def measurements(hass, options, now, *, unmonitored_test=False):
         if state is None:
             raise ValueError(f'Missing {key} measurement')
         reported = getattr(state, 'last_reported', None) or state.last_updated
-        age = now - reported.timestamp()
+        raw = state.state
+        unit = state.attributes.get('unit_of_measurement')
+        stamp = reported.timestamp()
+        if key == 'temperature' and temperature_sample is not None:
+            raw, stamp, unit = temperature_sample
+        age = now - stamp
         if age < -5 or age > options['pv_charge_max_age_s']:
             raise ValueError(f'Stale {key} measurement')
-        raw = finite(state.state)
-        unit = state.attributes.get('unit_of_measurement')
+        raw = finite(raw)
         if key == 'temperature':
             if unit != '°C' or not 0 <= raw <= 95:
                 raise ValueError('Invalid buffer temperature')
@@ -105,6 +110,7 @@ class BufferCharge:
         self.deadline_cancel = None
         self.closed = False
         self.tick_pending = False
+        self.temperature_reports = TemperatureReports(self.hass, self.request_tick, clock)
         # Share the lock with all ordinary Set Default operations.
         self.lock = coordinator._write_lock
 
@@ -163,7 +169,8 @@ class BufferCharge:
     def readings(self):
         # A test option may not weaken an existing normal charge's guards.
         testing = self.unmonitored_test and (self.lease is None or self.lease.get('temperature_unmonitored_test') is True)
-        return measurements(self.hass, self.options, self.clock(), unmonitored_test=testing)
+        sample = None if testing else self.temperature_reports.sample(self.options.get('pv_charge_temperature_sensor'))
+        return measurements(self.hass, self.options, self.clock(), unmonitored_test=testing, temperature_sample=sample)
 
     def point(self):
         points = [ident for ident, row in (self.c.data or {}).items() if is_buffer_offset(row)]
@@ -390,6 +397,7 @@ class BufferCharge:
 
     async def async_close(self):
         self.closed = True
+        self.temperature_reports.shutdown()
         for unsub in self.unsub:
             unsub()
         self.unsub.clear()

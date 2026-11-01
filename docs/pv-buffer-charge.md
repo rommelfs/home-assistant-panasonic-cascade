@@ -93,3 +93,7 @@ A software deadline **cannot guarantee rollback while HA is stopped or the contr
 ## Verification scope
 
 Protocol, HA entity/configuration/service tests and fault-injection tests simulate writes. They cover persisted baselines, expiry, reload/restart, nonzero restoration, ambiguous transport failures, retries, external changes, overrides, stale/invalid measurements, stable-export hysteresis, 75 °C stop protection, history semantics and preservation of existing dashboards. No physical heating command or commissioning test is performed by the release process.
+
+### ESPHome temperature report freshness
+
+Since 0.12.1, matching real packets from the configured ESPHome temperature sensor count even when HA suppresses identical sensor states. The existing connection is observed without reading/replaying its cache or modifying the source entity. The first possible subscription snapshot is ignored. Silence, missing/invalid measurements and disconnection still block charging; no freshness limit is increased. Status attributes show the native packet count and report age. Other source platforms continue to use HA `last_reported`. Firmware that does not publish regular temperature samples still needs its own reporting configuration corrected.

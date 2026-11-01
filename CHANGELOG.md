@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.12.1](docs/releases/v0.12.1.md)
+
+- Observe genuine ESPHome temperature packets on the existing connection, including identical values suppressed by HA state deduplication.
+- Ignore the first possible cached subscription snapshot; retain all age, disconnect, invalid-value and temperature-limit guards.
+- Add native temperature packet count and report age to PV charge status diagnostics.
+
 ## [0.12.0](docs/releases/v0.12.0.md)
 
 - Add optional heat-pump priority: count current PV battery charging and grid export, subtracting a configurable 1,000 W battery reserve.
