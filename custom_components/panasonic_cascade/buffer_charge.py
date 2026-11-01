@@ -20,6 +20,8 @@ from .zinc import value
 DEFAULTS = {
     'pv_charge_enabled': False, 'pv_charge_auto': False, 'pv_charge_confirmed': False,
     'pv_charge_test_without_temperature': False,
+    'pv_charge_heat_pump_priority': False, 'pv_charge_battery_reserve_w': 1000,
+    'pv_charge_grid_tolerance_w': 50,
     'pv_charge_export_positive': True, 'pv_charge_discharge_positive': True,
     'pv_charge_start_w': 1500, 'pv_charge_stop_w': 500, 'pv_charge_dwell_s': 120,
     'pv_charge_offset': 5, 'pv_charge_duration_min': 30, 'pv_charge_max_c': 75,
@@ -67,8 +69,22 @@ def measurements(hass, options, now, *, unmonitored_test=False):
         raise ValueError('No PV production')
     if result['battery'] > 100:
         raise ValueError('Battery is discharging')
-    if result['export'] < 0:
+    priority = options.get('pv_charge_heat_pump_priority', False)
+    tolerance = finite(options.get('pv_charge_grid_tolerance_w', 50)) if priority else 0
+    if not 0 <= tolerance <= 100:
+        raise ValueError('Invalid grid measurement tolerance')
+    if result['export'] < -tolerance:
         raise ValueError('Grid import')
+    # Export and battery charging are alternative sinks for current PV surplus.
+    # Signed subtraction also deducts a small battery discharge rather than
+    # incorrectly adding it to the solar budget. Never count more than measured PV.
+    if priority:
+        reserve = finite(options.get('pv_charge_battery_reserve_w', 1000))
+        if not 100 <= reserve <= 15000:
+            raise ValueError('Invalid battery charging reserve')
+        result['available'] = min(result['pv'], result['export'] - result['battery']) - reserve
+    else:
+        result['available'] = result['export']
     if not unmonitored_test and result['temperature'] >= min(75, finite(options['pv_charge_max_c'])):
         raise ValueError('Buffer temperature limit reached')
     return result
@@ -187,9 +203,9 @@ class BufferCharge:
                 raise ValueError('Charge requires 1–120 minutes and an offset of 1–10 °C')
             self.readings()
             if self.stable_since is None or self.clock() - self.stable_since < o['pv_charge_dwell_s']:
-                raise ValueError('Wait for stable PV export above the configured start threshold')
-            if self.readings()['export'] < o['pv_charge_start_w']:
-                raise ValueError('Insufficient PV export to start')
+                raise ValueError('Wait for stable available PV surplus above the configured start threshold')
+            if self.readings()['available'] < o['pv_charge_start_w']:
+                raise ValueError('Insufficient PV surplus after battery reserve to start')
             if not self.c.last_update_success:
                 raise ValueError('Controller data is unavailable')
             ident = self.point()
@@ -205,7 +221,7 @@ class BufferCharge:
             if not bounds(row)[0] <= offset <= bounds(row)[1] or offset <= baseline:
                 raise ValueError('Charge offset must exceed the existing default and respect live controller bounds')
             # Recheck source guards after the network read, immediately before writing.
-            if not self.configured() or not self.c.last_update_success or self.readings()['export'] < o['pv_charge_start_w']:
+            if not self.configured() or not self.c.last_update_success or self.readings()['available'] < o['pv_charge_start_w']:
                 raise ValueError('PV charging conditions changed')
         except (ApiError, AuthError, ValueError, TypeError) as err:
             raise HomeAssistantError(str(err)) from err
@@ -333,8 +349,8 @@ class BufferCharge:
                         reason = 'Charge duration expired'
                     elif not self.c.last_update_success:
                         reason = 'Controller connection lost'
-                    elif self.readings()['export'] < self.options['pv_charge_stop_w']:
-                        reason = 'PV export below stop threshold'
+                    elif self.readings()['available'] < self.options['pv_charge_stop_w']:
+                        reason = 'PV surplus below stop threshold after battery reserve'
                     if reason is None and self.clock() - self.last_verify >= 15:
                         await self.heating_mode()
                         row = await self.fresh(self.lease['point'])
@@ -354,14 +370,14 @@ class BufferCharge:
                     if not self.c.last_update_success:
                         raise ValueError('Controller data is unavailable')
                     data = self.readings()
-                    if data['export'] < self.options['pv_charge_start_w']:
-                        self.status, self.reason, self.stable_since = 'waiting', 'Waiting for PV export', None
+                    if data['available'] < self.options['pv_charge_start_w']:
+                        self.status, self.reason, self.stable_since = 'waiting', 'Waiting for PV surplus after battery reserve', None
                     else:
                         if self.stable_since is None:
                             self.stable_since = self.clock()
                         stable = self.clock() - self.stable_since >= self.options['pv_charge_dwell_s']
                         self.status = 'ready' if stable else 'waiting'
-                        self.reason = 'Stable PV export; ready to start' if stable else 'Waiting for stable PV export'
+                        self.reason = 'Stable PV surplus; ready to start' if stable else 'Waiting for stable PV surplus'
                         if self.options['pv_charge_auto'] and not self.unmonitored_test and self.clock() - self.stable_since >= self.options['pv_charge_dwell_s']:
                             try:
                                 await self._start()

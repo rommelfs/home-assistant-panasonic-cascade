@@ -317,6 +317,84 @@ class ChargeTest(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(HomeAssistantError):await self.begin()
         self.assertEqual(self.writes,[3,2])
 
+
+    async def test_priority_counts_charge_and_signed_grid_after_1000w_reserve(self):
+        self.options.update(pv_charge_heat_pump_priority=True,pv_charge_export_positive=False,
+                            pv_charge_discharge_positive=False)
+        self.states['sensor.export'].state='7'
+        self.states['sensor.battery'].state='7468'
+        self.states['sensor.pv'].state='9255'
+        data=self.m.readings()
+        self.assertEqual(data['export'],-7)
+        self.assertEqual(data['battery'],-7468)
+        self.assertEqual(data['available'],6461)
+        await self.begin();self.assertEqual(self.writes,[7])
+        from custom_components.panasonic_cascade.charge_entities import BufferChargeSensor
+        attrs=BufferChargeSensor(self.c).extra_state_attributes
+        self.assertTrue(attrs['heat_pump_priority']);self.assertEqual(attrs['battery_reserve_w'],1000)
+        self.assertEqual(attrs['available_surplus_w'],6461)
+
+    async def test_priority_auto_starts_only_after_stable_available_surplus(self):
+        self.options.update(pv_charge_heat_pump_priority=True,pv_charge_auto=True)
+        self.states['sensor.export'].state='0';self.states['sensor.battery'].state='-4000'
+        await self.m.async_tick();self.assertEqual(self.writes,[])
+        self.advance(120);self.states['sensor.export'].state='0';self.states['sensor.battery'].state='-4000'
+        await self.m.async_tick();self.assertEqual(self.writes,[5])
+
+    async def test_priority_preserves_reserve_and_restores_when_budget_drops(self):
+        self.options['pv_charge_heat_pump_priority']=True
+        self.states['sensor.export'].state='0';self.states['sensor.battery'].state='-4000'
+        await self.begin()
+        self.states['sensor.battery'].state='-1800';await self.m.async_tick()
+        self.assertIsNotNone(self.m.lease)
+        self.states['sensor.battery'].state='-1200';await self.m.async_tick()
+        self.assertEqual(self.writes,[7,2]);self.assertIsNone(self.m.lease)
+
+    async def test_priority_supports_full_battery_via_grid_export(self):
+        self.options['pv_charge_heat_pump_priority']=True
+        self.states['sensor.export'].state='3000';self.states['sensor.battery'].state='0'
+        self.assertEqual(self.m.readings()['available'],2000)
+        await self.begin();self.assertEqual(self.writes,[7])
+
+    async def test_priority_keeps_import_discharge_freshness_and_pv_guards(self):
+        self.options['pv_charge_heat_pump_priority']=True
+        for key,bad in [('export','-51'),('battery','101'),('pv','0'),('battery','unknown')]:
+            self.refresh();self.states['sensor.'+key].state=bad
+            with self.assertRaises(HomeAssistantError):await self.begin()
+        self.refresh();self.t+=61
+        with self.assertRaises(HomeAssistantError):await self.begin()
+        self.assertEqual(self.writes,[])
+        self.refresh();self.states['sensor.battery'].state='-4000'
+        await self.begin();self.states['sensor.export'].state='-51'
+        await self.m.async_tick();self.assertEqual(self.writes,[7,2])
+
+    async def test_priority_cannot_claim_more_than_measured_pv_or_count_discharge(self):
+        self.options['pv_charge_heat_pump_priority']=True
+        self.states['sensor.export'].state='0';self.states['sensor.battery'].state='-10000'
+        self.states['sensor.pv'].state='2000'
+        self.assertEqual(self.m.readings()['available'],1000)
+        with self.assertRaises(HomeAssistantError):await self.begin()
+        self.states['sensor.export'].state='3000';self.states['sensor.battery'].state='50'
+        self.states['sensor.pv'].state='6000'
+        self.assertEqual(self.m.readings()['available'],1950)
+
+    async def test_export_only_behavior_is_unchanged_without_priority(self):
+        self.states['sensor.export'].state='-1';self.states['sensor.battery'].state='-5000'
+        with self.assertRaises(HomeAssistantError):await self.begin()
+        self.states['sensor.export'].state='0'
+        self.assertEqual(self.m.readings()['available'],0)
+        with self.assertRaises(HomeAssistantError):await self.begin()
+        self.assertEqual(self.writes,[])
+
+    async def test_priority_rejects_invalid_reserve_and_grid_tolerance(self):
+        self.options['pv_charge_heat_pump_priority']=True
+        for key,bad in [('pv_charge_battery_reserve_w',0),('pv_charge_battery_reserve_w',float('nan')),
+                        ('pv_charge_grid_tolerance_w',101),('pv_charge_grid_tolerance_w',-1)]:
+            old=self.options[key];self.options[key]=bad
+            with self.assertRaises(HomeAssistantError):await self.begin()
+            self.options[key]=old
+        self.assertEqual(self.writes,[])
+
 class ChargeOptionsAndDashboardTest(unittest.IsolatedAsyncioTestCase):
     async def test_configuration_defaults_sources_confirmation_hysteresis_and_limit(self):
         from custom_components.panasonic_cascade.config_flow import CascadeOptionsFlow

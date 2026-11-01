@@ -2,6 +2,13 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.12.0](docs/releases/v0.12.0.md)
+
+- Add optional heat-pump priority: count current PV battery charging and grid export, subtracting a configurable 1,000 W battery reserve.
+- Apply stable start/stop thresholds to available surplus and retain discharge, freshness, temperature, lease and restoration guards.
+- Add a priority-only 0–100 W grid measurement tolerance (default 50 W), plus dashboard/status budget and reserve values. Export-only mode is unchanged.
+- Keep the limitations explicit: a heating offset does not regulate compressor draw or guarantee a minimum battery charging rate.
+
 ## [0.11.1](docs/releases/v0.11.1.md)
 
 - Add an explicitly opted-in sensorless hardware charge test: manual only, maximum five minutes and at most 2 °C additional offset within verified controller bounds.

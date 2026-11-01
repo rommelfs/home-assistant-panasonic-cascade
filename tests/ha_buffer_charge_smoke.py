@@ -63,6 +63,22 @@ async def main():
   assert any(s.state=='Ladetest ohne Temperaturüberwachung' for s in hass.states.async_all('sensor'))
   await hass.services.async_call('panasonic_cascade','stop_buffer_charge',{'entry_id':entry.entry_id},blocking=True)
   assert writes==[7,2,4,2],writes
+  # Real HA automatic priority start uses battery charging, preserving a 1 kW reserve.
+  hass.states.async_set('sensor.test_export','7',{'unit_of_measurement':'W'})
+  hass.states.async_set('sensor.test_battery','4000',{'unit_of_measurement':'W'})
+  hass.states.async_set('sensor.test_temperature','40',{'unit_of_measurement':'°C'})
+  hass.config_entries.async_update_entry(entry,options={**dict(entry.options),
+    'pv_charge_test_without_temperature':False,'pv_charge_temperature_sensor':'sensor.test_temperature',
+    'pv_charge_heat_pump_priority':True,'pv_charge_battery_reserve_w':1000,
+    'pv_charge_auto':True,'pv_charge_export_positive':False,'pv_charge_discharge_positive':False})
+  await hass.async_block_till_done()
+  manager=entry.runtime_data.buffer_charge;manager.stable_since=manager.clock()-121
+  await manager.async_tick()
+  assert writes==[7,2,4,2,5],writes
+  assert manager.lease['temperature_unmonitored_test'] is False
+  assert manager.readings()['available']==2993
+  await hass.services.async_call('panasonic_cascade','stop_buffer_charge',{'entry_id':entry.entry_id},blocking=True)
+  assert writes==[7,2,4,2,5,2],writes
   assert await hass.config_entries.async_unload(entry.entry_id)
   await hass.async_stop(force=True)
   print('SERVICE_START_RELOAD_RESTORE_AND_UNLOAD_OK',writes)

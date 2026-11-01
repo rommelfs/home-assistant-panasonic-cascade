@@ -242,7 +242,8 @@ def build_dashboard(hass, entry_id=None):
         status = [r['entity'] for r in charge_rows if r['entity'].startswith('sensor.')]
         for entity_id in status:
             content = "{{ state_attr('" + entity_id + "','reason') or 'PV-Pufferladung in den Integrationsoptionen konfigurieren.' }}\n\n"
-            for attribute, label, unit in [('baseline_offset','Vorheriger Versatz','°C'), ('requested_offset','Temporärer Versatz','°C'),
+            for attribute, label, unit in [('available_surplus_w','Für WP verfügbar','W'),
+                                          ('battery_reserve_w','Batteriereserve','W'), ('baseline_offset','Vorheriger Versatz','°C'), ('requested_offset','Temporärer Versatz','°C'),
                                           ('effective_offset','Wirksamer Versatz','°C'), ('zone_target','Zone Soll','°C'),
                                           ('buffer_target','Puffer Soll','°C'), ('buffer_temperature','Puffer Ist','°C'),
                                           ('temperature_limit','Abschaltgrenze','°C'), ('remaining_minutes','Restzeit','min')]:

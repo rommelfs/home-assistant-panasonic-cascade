@@ -19,6 +19,22 @@ The configurable **buffer temperature stop limit** is capped at **75 °C**. It i
 
 Sources must actually update often enough. Increasing the maximum age does not make a slow integration fast feedback. Missing, stale, non-finite or incorrectly dimensioned measurements block charging; they are never replaced with zero. No PV production, grid import, battery discharge above 100 W, leaving the cascade heating mode, or reaching the temperature limit ends a charge. Export falling below the stop threshold ends it as well. The conditions are checked on source state changes and at least every 15 seconds; a dedicated deadline callback also requests restoration at expiry. Physical device/network delays remain possible.
 
+## Heat-pump priority over battery charging (0.12.0)
+
+By default the controller still uses actual grid export only. To let the heat pump use PV power currently absorbed by the battery, opt into **Heat-pump priority**. Set **PV power reserved for battery charging**; the default is **1,000 W**. Existing EMMA source/sign mappings are retained.
+
+With normalized positive export and positive battery discharge:
+
+`available = min(PV production, grid export − battery discharge) − battery reserve`
+
+Battery charging has a negative discharge value, so it contributes to available surplus. A small discharge is deducted and discharge above 100 W still blocks/stops charging. With 9,255 W PV, 7,468 W battery charging and 7 W grid import, available surplus is **6,461 W** after a 1,000 W reserve. If the battery is full, sufficient grid export can supply the budget instead. The budget never exceeds measured PV production before the reserve.
+
+The existing 1,500 W start and 500 W stop thresholds now apply to this available surplus, after the reserve. Start requires the full stable interval. Loss of available surplus requests original-offset restoration. No battery settings, charge limits, operating modes or grid export limits are changed.
+
+A priority-only **grid-import measurement tolerance** defaults to 50 W (configurable 0–100 W). It allows ordinary meter/regulator fluctuations such as 7 W around zero; import above it blocks/stops charging even if battery charging is high. Export-only mode retains strict no-import behavior. Sensor freshness, verified temperature, heating mode, lease expiry and restoration protections continue to apply.
+
+**This is a reactive heating-offset controller, not a power allocator.** It cannot modulate compressor electrical demand, guarantee exactly 1,000 W of battery charging, or prevent every brief import/discharge transient. It withdraws its offset when measurements fail the conditions; the original heating demand may still keep the heat pump running. It does not change battery priority in the inverter itself. Status/dashboard expose the calculated available surplus and configured battery reserve. Begin with a modest offset and verify actual power flows before relying on this priority policy.
+
 ## Explicit sensorless hardware charge test (0.11.1)
 
 For a supervised commissioning test before a buffer sensor is installed, explicitly select **Charge test WITHOUT buffer sensor** in the PV options. This is a real heat-pump command, not a simulation. Leave the temperature source empty; no artificial temperature is generated. The temperature cutoff is unavailable in this mode, even if a temperature source remains selected. Normal charging still requires a valid actual buffer temperature.

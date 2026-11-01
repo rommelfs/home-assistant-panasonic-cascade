@@ -73,7 +73,7 @@
       },
       "pv_charge": {
         "title": "Temporary PV buffer charging",
-        "description": "Disabled until explicitly enabled. The supported offset is 0–10 °C; a stop limit up to 75 °C does not command that absolute target. Power sources require W/kW and regular fresh updates; temperature requires °C. Normal charging requires valid actual buffer feedback; only the explicitly selected hardware test omits it. Sensorless test: real heat-pump write without temperature cutoff. Start manually under supervision, never for unattended operation. Maximum 5 minutes and 2 °C additional offset. Automatic start must be off. The previous offset is restored afterwards when the controller is reachable.",
+        "description": "Disabled until explicitly enabled. The supported offset is 0–10 °C; a stop limit up to 75 °C does not command that absolute target. Power sources require W/kW and regular fresh updates; temperature requires °C. Normal charging requires valid actual buffer feedback; only the explicitly selected hardware test omits it. Sensorless test: real heat-pump write without temperature cutoff. Start manually under supervision, never for unattended operation. Maximum 5 minutes and 2 °C additional offset. Automatic start must be off. The previous offset is restored afterwards when the controller is reachable. With heat-pump priority, available surplus is export plus battery charging minus the battery reserve. The offset enables heating but cannot regulate electrical draw or guarantee a minimum battery charging rate. Falling below the surplus stop threshold or exceeding the grid-import tolerance requests restoration.",
         "data": {
           "pv_charge_enabled": "Enable temporary PV buffer charging",
           "pv_charge_auto": "Start automatically when PV export is stable",
@@ -84,14 +84,17 @@
           "pv_charge_battery_sensor": "Signed battery discharge/charge power",
           "pv_charge_pv_sensor": "PV production power",
           "pv_charge_temperature_sensor": "Actual buffer temperature at the hottest monitored point",
-          "pv_charge_start_w": "Minimum net export to start",
-          "pv_charge_stop_w": "Stop below net export",
+          "pv_charge_start_w": "Available PV surplus to start (after battery reserve)",
+          "pv_charge_stop_w": "Stop below this available PV surplus",
           "pv_charge_dwell_s": "Stable export before starting",
           "pv_charge_offset": "Temporary offset relative to zones (not an absolute target)",
           "pv_charge_duration_min": "Maximum charge duration",
           "pv_charge_max_c": "Buffer temperature stop limit (not a 75 °C target)",
           "pv_charge_max_age_s": "Maximum measurement age",
-          "pv_charge_test_without_temperature": "Explicit charge test WITHOUT buffer sensor (manual, max. 5 min, up to 2 °C additional offset)"
+          "pv_charge_test_without_temperature": "Explicit charge test WITHOUT buffer sensor (manual, max. 5 min, up to 2 °C additional offset)",
+          "pv_charge_heat_pump_priority": "Heat-pump priority: share current battery charging power with the heat pump",
+          "pv_charge_battery_reserve_w": "PV power reserved for battery charging",
+          "pv_charge_grid_tolerance_w": "Grid import measurement tolerance with heat-pump priority"
         }
       }
     },

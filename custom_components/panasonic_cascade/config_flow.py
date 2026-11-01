@@ -201,13 +201,15 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
         d = {**CHARGE_DEFAULTS, **previous, **(user_input or {})}
         fields = {}
         for key in ('pv_charge_enabled', 'pv_charge_auto', 'pv_charge_test_without_temperature', 'pv_charge_confirmed',
-                    'pv_charge_export_positive', 'pv_charge_discharge_positive'):
+                    'pv_charge_export_positive', 'pv_charge_discharge_positive', 'pv_charge_heat_pump_priority'):
             fields[vol.Required(key, default=d[key])] = bool
         for key in SOURCE_KEYS:
             field = f'pv_charge_{key}_sensor'
             marker = vol.Optional(field, description={'suggested_value':d[field]}) if d.get(field) else vol.Optional(field)
             fields[marker] = selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))
         for key, low, high, step, unit in (
+            ('pv_charge_battery_reserve_w', 100, 15000, 100, 'W'),
+            ('pv_charge_grid_tolerance_w', 0, 100, 5, 'W'),
             ('pv_charge_start_w', 100, 30000, 100, 'W'), ('pv_charge_stop_w', 0, 29900, 100, 'W'),
             ('pv_charge_dwell_s', 15, 600, 15, 's'), ('pv_charge_offset', 1, 10, 1, '°C'),
             ('pv_charge_duration_min', 1, 120, 1, 'min'), ('pv_charge_max_c', 20, 75, 1, '°C'),
