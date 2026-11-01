@@ -96,6 +96,7 @@ def build_dashboard(hass, entry_id=None):
     groups, controls, overview, temperatures, power, energy, alarms, efficiency, statistical_energy = {}, [], [], [], [], [], [], [], []
     operating, hours, electrical_energy, starts, power_running = [], [], [], [], []
     charge_rows = []
+    source_rows = {}
     point_models = {}
     for entry in entries:
         data = getattr(getattr(entry, "runtime_data", None), "data", {})
@@ -108,6 +109,10 @@ def build_dashboard(hass, entry_id=None):
         row = {"entity": entity.entity_id, "name": label}
         if entity.unique_id.endswith(('|pv_buffer_charge', '|pv_buffer_charge_start', '|pv_buffer_charge_stop', '|pv_buffer_charge_active')):
             charge_rows.append(row)
+            continue
+        if '|energy_source:' in entity.unique_id:
+            source, period = entity.unique_id.rsplit('|energy_source:',1)[1].split(':')
+            source_rows.setdefault(entity.config_entry_id, {}).setdefault(period, {})[source] = row
             continue
         device = devices.devices.get(entity.device_id)
         group = device.name_by_user or device.name if device else "Anlage"
@@ -252,6 +257,28 @@ def build_dashboard(hass, entry_id=None):
                 content += label + ": {{ state_attr('" + entity_id + "','" + attribute + "') if state_attr('" + entity_id + "','" + attribute + "') is not none else '—' }} " + unit + "  \n"
             content += "\nDie Abschaltgrenze bis 75 °C ist kein absoluter Puffersollwert. Der bestätigte Versatz beträgt höchstens 10 °C."
             settings['cards'].insert(1, {'type':'markdown','title':'PV-Ladung · Rückstellung und Messwerte','content':content})
+    if source_rows:
+        energy_view = next((v for v in config['views'] if v['path']=='energy'),None)
+        if energy_view is None:
+            energy_view = {'title':'Energie','path':'energy','icon':'mdi:lightning-bolt','cards':[]}
+            config['views'].append(energy_view)
+        labels = {'pv':'PV','grid':'Netz','battery':'Batterie'}
+        for entry_id, periods in source_rows.items():
+            title = next(e.title for e in entries if e.entry_id==entry_id)
+            prefix = 'WP · Stromherkunft' + (' · '+title if len(source_rows)>1 else '')
+            def selected(period):
+                return [{'entity':periods[period][key]['entity'],'name':labels[key]} for key in ('pv','grid','battery') if key in periods.get(period,{})]
+            cards = [{'type':'markdown','title':prefix,'content':'**Rechnerische Zuordnung für alle Wärmepumpen.** PV/Netz/Batterie werden anteilig aus dem Haus-Strommix zugeordnet; keine getrennte Herkunftsmessung am WP-Anschluss. Batterieherkunft bleibt unbekannt. Zählung ab Einrichtung; Messlücken werden ausgelassen.'}]
+            if selected('power'):
+                cards += [{'type':'entities','title':prefix+' · Aktuell','show_header_toggle':False,'entities':selected('power')},
+                          {'type':'history-graph','title':prefix+' · Leistung (24 h)','hours_to_show':24,'entities':selected('power')}]
+            for period,label in [('day','Heute'),('week','Diese Woche'),('month','Dieser Monat'),('year','Dieses Jahr'),('total','Seit Einrichtung')]:
+                if selected(period):cards.append({'type':'entities','title':prefix+' · '+label,'show_header_toggle':False,'entities':selected(period)})
+            for period,label,days in [('hour','Stündlich',2),('day','Täglich',14),('week','Wöchentlich',90),('month','Monatlich',365),('year','Jährlich',730)]:
+                if selected('total'):
+                    cards.append({'type':'statistics-graph','title':prefix+' · '+label,'chart_type':'bar','period':period,
+                                  'days_to_show':days,'stat_types':['change'],'entities':selected('total')})
+            energy_view['cards'] += cards
     overview = next(v for v in config['views'] if v.get('path') == 'overview')
     pv_cards = []
     for row in charge_rows:

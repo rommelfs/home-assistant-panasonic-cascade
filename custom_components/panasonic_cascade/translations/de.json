@@ -68,7 +68,9 @@
           "alarm_notify_service": "Alarm-Push aufs Handy (iPhone: Apple Push / Companion App)",
           "alarm_time_sensitive": "iPhone/iPad: zeitkritische Alarm-Pushs",
           "power_threshold_w": "Taktung: Leistungsschwelle je WP (W)",
-          "configure_pv_charge": "PV-Pufferladung konfigurieren"
+          "configure_pv_charge": "PV-Pufferladung konfigurieren",
+          "configure_energy_sources": "Messquellen der Stromherkunft konfigurieren",
+          "energy_sources_enabled": "PV-/Netz-/Batterie-Zuordnung für WP erfassen"
         }
       },
       "pv_charge": {
@@ -99,6 +101,18 @@
           "pv_charge_stop_delay_s": "Verzögerung bei geringer Überschussreserve",
           "pv_charge_restart_delay_min": "Sperrzeit vor erneutem automatischen Start"
         }
+      },
+      "energy_sources": {
+        "title": "Stromherkunft der Wärmepumpen",
+        "description": "Rechnerische Zuordnung für alle Wärmepumpen aus dem Haus-Strommix, keine direkte Herkunftsmessung. PV versorgt zuerst Einspeisung und Batterieladung; der verbleibende PV-/Netz-/Batteriemix wird anteilig der WP zugerechnet. Batterieherkunft bleibt unbekannt. Zähler starten ab Einrichtung; Lücken werden ausgelassen. Unabhängig von der PV-Ladefreigabe.",
+        "data": {
+          "energy_pv_sensor": "PV-Erzeugung",
+          "energy_export_sensor": "Netzleistung mit Vorzeichen",
+          "energy_battery_sensor": "Batterieleistung mit Vorzeichen",
+          "energy_export_positive": "Positive Netzwerte bedeuten Einspeisung",
+          "energy_discharge_positive": "Positive Batteriewerte bedeuten Entladung",
+          "energy_max_age_s": "Maximales Messwertalter (Sekunden)"
+        }
       }
     },
     "error": {
@@ -106,7 +120,8 @@
       "pv_charge_not_confirmed": "Steuerungen aktivieren und die geprüften Voraussetzungen bestätigen.",
       "pv_charge_missing_sources": "Alle drei Leistungsquellen auswählen; für normale Ladung zusätzlich den Pufferfühler.",
       "pv_charge_thresholds": "Die Startschwelle muss höher als die Stoppschwelle sein.",
-      "pv_charge_test_manual_only": "Ladetest ohne Pufferfühler erlaubt keinen automatischen Start."
+      "pv_charge_test_manual_only": "Ladetest ohne Pufferfühler erlaubt keinen automatischen Start.",
+      "energy_sources_missing": "Alle drei Leistungsquellen auswählen."
     }
   }
 }

@@ -38,6 +38,10 @@ async def async_setup_entry(hass, entry, async_add_entities):
     if getattr(coordinator, "buffer_charge", None) is not None:
         from .charge_entities import BufferChargeSensor
         entities.append(BufferChargeSensor(coordinator))
+    if getattr(coordinator, 'energy_sources', None) is not None:
+        from .energy_sources import SourceSensor, SOURCES, PERIODS
+        entities.extend(SourceSensor(coordinator.energy_sources, source, period)
+                        for source in SOURCES for period in ('power','total',*PERIODS))
     async_add_entities(entities)
 
 

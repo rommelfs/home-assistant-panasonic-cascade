@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.14.0](docs/releases/v0.14.0.md)
+
+- Add explicitly estimated PV/grid/battery attribution for aggregate heat-pump electrical power, independent of PV-charge permission.
+- Persist kWh totals and local-calendar daily/weekly/monthly/yearly counters, with current W values and hourly through yearly charts.
+- Reuse configured PV source mappings or configure independent metering sources; omit stale/missing intervals and preserve existing dashboard cards.
+
 ## [0.13.0](docs/releases/v0.13.0.md)
 
 - Renew healthy automatic PV charging before its block expires, without restoring and reapplying the offset.

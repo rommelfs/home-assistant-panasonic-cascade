@@ -157,9 +157,13 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             else:
                 data = {**self.config_entry.options, **user_input}
                 configure = data.pop('configure_pv_charge', False)
+                self._configure_energy_sources = data.pop('configure_energy_sources', False)
                 if configure:
                     self._pending_options = data
                     return await self.async_step_pv_charge()
+                if self._configure_energy_sources:
+                    self._pending_options = data
+                    return await self.async_step_energy_sources()
                 return self.async_create_entry(title='', data=data)
         d = {**self.config_entry.options, **(user_input or {})}
         targets = [{'value':'', 'label':'Ausgeschaltet'}]
@@ -172,6 +176,8 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             vol.Required('scan_interval', default=d.get('scan_interval', 30)): vol.All(vol.Coerce(int), vol.Range(min=15, max=300)),
             vol.Required('enable_controls', default=d.get('enable_controls', False)): bool,
             vol.Required('configure_pv_charge', default=False): bool,
+            vol.Required('configure_energy_sources', default=False): bool,
+            vol.Required('energy_sources_enabled', default=d.get('energy_sources_enabled', True)): bool,
             vol.Required('use_dhw', default=d.get('use_dhw', True)): bool,
             vol.Required('power_threshold_w', default=d.get('power_threshold_w', 200)): vol.All(vol.Coerce(int), vol.Range(min=50, max=5000)),
             vol.Required('alarm_notify_service', default=d.get('alarm_notify_service', '')): selector.SelectSelector(selector.SelectSelectorConfig(options=targets)),
@@ -197,6 +203,9 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             elif data['pv_charge_stop_w'] >= data['pv_charge_start_w']:
                 errors['base'] = 'pv_charge_thresholds'
             else:
+                if getattr(self, '_configure_energy_sources', False):
+                    self._pending_options = data
+                    return await self.async_step_energy_sources()
                 return self.async_create_entry(title='', data=data)
         d = {**CHARGE_DEFAULTS, **previous, **(user_input or {})}
         fields = {}
@@ -220,3 +229,24 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             fields[vol.Required(key, default=d[key])] = selector.NumberSelector(selector.NumberSelectorConfig(
                 min=low, max=high, step=step, unit_of_measurement=unit, mode='box'))
         return self.async_show_form(step_id='pv_charge', data_schema=vol.Schema(fields), errors=errors)
+
+
+    async def async_step_energy_sources(self, user_input=None):
+        from .energy_sources import mapping
+        previous = getattr(self, '_pending_options', dict(self.config_entry.options))
+        errors = {}
+        if user_input is not None:
+            data = {**previous, **user_input}
+            if data.get('energy_sources_enabled', True) and not all(data.get('energy_'+key+'_sensor') for key in ('pv','export','battery')):
+                errors['base'] = 'energy_sources_missing'
+            else:
+                return self.async_create_entry(title='', data=data)
+        d = {**previous, **(user_input or {})}
+        fields = {}
+        for key in ('pv','export','battery'):
+            field = 'energy_'+key+'_sensor'
+            fields[vol.Required(field, description={'suggested_value':mapping(d,key+'_sensor') or ''})] = selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))
+        for key in ('export_positive','discharge_positive'):
+            fields[vol.Required('energy_'+key, default=mapping(d,key,True))] = bool
+        fields[vol.Required('energy_max_age_s', default=d.get('energy_max_age_s',90))] = vol.All(vol.Coerce(int),vol.Range(min=15,max=300))
+        return self.async_show_form(step_id='energy_sources',data_schema=vol.Schema(fields),errors=errors)

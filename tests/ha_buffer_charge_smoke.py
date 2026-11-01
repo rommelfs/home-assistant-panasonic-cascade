@@ -19,7 +19,7 @@ async def main():
  class Client:
   url='https://controller.invalid';project='demo'
   def __init__(self,*_):pass
-  async def snapshot(self,*_):return {'p:demo:r:offset':dict(row),'p:demo:r:mode':{'id':Ref('p:demo:r:mode'),'bufferModelId':'_equip:buffer_point:bufferMode','curStatus':'ok','curVal':'Heat'}}
+  async def snapshot(self,*_):return {'summary:consumedPower':{'curVal':Number(2,'kW'),'unit':'kW','curStatus':'ok'},'p:demo:r:offset':dict(row),'p:demo:r:mode':{'id':Ref('p:demo:r:mode'),'bufferModelId':'_equip:buffer_point:bufferMode','curStatus':'ok','curVal':'Heat'}}
   async def read_point(self,ident,*_):return {'bufferModelId':'_equip:buffer_point:bufferMode','curStatus':'ok','curVal':'Heat'} if ident=='p:demo:r:mode' else dict(row)
   async def set_default(self,point,target):
    writes.append(target);row.update(curVal=Number(target,'°C'),writeDef=Number(target,'°C'))
@@ -35,6 +35,18 @@ async def main():
   states=[(s.entity_id,s.state) for s in hass.states.async_all() if s.entity_id.startswith(('number.','button.')) or 'pv_pufferladung' in s.entity_id]
   print('ENTRY_LOADED',states)
   assert len([x for x in states if x[0].startswith('number.')])==1,states
+  # Source accounting is independent of manual charge permissions and never writes hardware.
+  accounting=entry.runtime_data.energy_sources
+  assert accounting is not None
+  assert accounting.power=={'pv':2000.0,'grid':0.0,'battery':0.0},accounting.power
+  assert len([s for s in hass.states.async_all('sensor') if 'zugeordnet' in s.entity_id])==18
+  instant=accounting.clock()
+  accounting.ledger.last=None
+  with patch.object(accounting,'clock',return_value=instant):accounting.tick()
+  with patch.object(accounting,'clock',return_value=instant+15):accounting.tick()
+  assert abs(accounting.ledger.total['pv']-2000*15/3600000)<.00001
+  before_reload=accounting.ledger.total['pv']
+  assert writes==[]
   manager=entry.runtime_data.buffer_charge;manager.stable_since=manager.clock()-121
   await hass.services.async_call('panasonic_cascade','start_buffer_charge',{'entry_id':entry.entry_id,'offset':7,'duration_minutes':1},blocking=True)
   await hass.async_block_till_done()
@@ -48,6 +60,8 @@ async def main():
   assert writes==[7,2],writes
   assert any(s.state=='off' for s in hass.states.async_all('binary_sensor') if 'pv_pufferladung' in s.entity_id)
   assert entry.runtime_data.buffer_charge.lease is None
+  assert entry.runtime_data.energy_sources.ledger.total['pv']>=before_reload
+  assert accounting.closed and not accounting.unsub
   # Explicit sensorless test, through real HA services; automatic start remains off.
   hass.config_entries.async_update_entry(entry,options={**dict(entry.options),
     'pv_charge_test_without_temperature':True,'pv_charge_temperature_sensor':''})
@@ -79,6 +93,23 @@ async def main():
   assert manager.readings()['available']==2993
   await hass.services.async_call('panasonic_cascade','stop_buffer_charge',{'entry_id':entry.entry_id},blocking=True)
   assert writes==[7,2,4,2,5,2],writes
+  # Metering continues without PV-charge permission, including at night.
+  hass.states.async_set('sensor.test_pv','0',{'unit_of_measurement':'W'})
+  hass.states.async_set('sensor.test_export','4000',{'unit_of_measurement':'W'})
+  hass.states.async_set('sensor.test_battery','0',{'unit_of_measurement':'W'})
+  hass.config_entries.async_update_entry(entry,options={**dict(entry.options),'pv_charge_enabled':False,'pv_charge_auto':False})
+  await hass.async_block_till_done()
+  accounting=entry.runtime_data.energy_sources
+  assert accounting.power=={'pv':0.0,'grid':2000.0,'battery':0.0},accounting.power
+  assert writes==[7,2,4,2,5,2]
+  # Invalid meters break the integration interval, not synthesize zero consumption.
+  hass.states.async_set('sensor.test_export','unavailable',{'unit_of_measurement':'W'})
+  await hass.async_block_till_done()
+  assert accounting.power is None and accounting.ledger.last is None
+  hass.config_entries.async_update_entry(entry,options={**dict(entry.options),'energy_sources_enabled':False})
+  await hass.async_block_till_done()
+  assert entry.runtime_data.energy_sources is None
+  assert accounting.closed and not accounting.unsub
   assert await hass.config_entries.async_unload(entry.entry_id)
   await hass.async_stop(force=True)
   print('SERVICE_START_RELOAD_RESTORE_AND_UNLOAD_OK',writes)

@@ -68,7 +68,9 @@
           "alarm_notify_service": "Alarm push destination (iPhone: Apple Push / Companion App)",
           "alarm_time_sensitive": "iPhone/iPad: time-sensitive alarm notifications",
           "power_threshold_w": "Cycling: electrical power threshold per heat pump (W)",
-          "configure_pv_charge": "Configure temporary PV buffer charging"
+          "configure_pv_charge": "Configure temporary PV buffer charging",
+          "configure_energy_sources": "Configure electricity-source measurements",
+          "energy_sources_enabled": "Record WP electricity attribution to PV/grid/battery"
         }
       },
       "pv_charge": {
@@ -99,6 +101,18 @@
           "pv_charge_stop_delay_s": "Delay while surplus margin is low",
           "pv_charge_restart_delay_min": "Cooldown before another automatic start"
         }
+      },
+      "energy_sources": {
+        "title": "Heat-pump electricity sources",
+        "description": "Estimated attribution for all heat pumps from the household power mix, not direct source metering. Subtract export and battery charging from PV first, then attribute the remaining PV/grid/battery mix proportionally to the heat pumps. Battery provenance is not inferred. Counters start at setup; gaps are omitted. Independent of the PV charging permission.",
+        "data": {
+          "energy_pv_sensor": "PV production",
+          "energy_export_sensor": "Signed grid power",
+          "energy_battery_sensor": "Signed battery power",
+          "energy_export_positive": "Positive grid readings mean export",
+          "energy_discharge_positive": "Positive battery readings mean discharge",
+          "energy_max_age_s": "Maximum measurement age (seconds)"
+        }
       }
     },
     "error": {
@@ -106,7 +120,8 @@
       "pv_charge_not_confirmed": "Enable experimental controls and confirm the verified prerequisites.",
       "pv_charge_missing_sources": "Select all three power sources and, for normal charging, the actual buffer temperature.",
       "pv_charge_thresholds": "The start threshold must exceed the stop threshold.",
-      "pv_charge_test_manual_only": "Sensorless charge tests do not allow automatic start."
+      "pv_charge_test_manual_only": "Sensorless charge tests do not allow automatic start.",
+      "energy_sources_missing": "Select all three power measurements."
     }
   }
 }

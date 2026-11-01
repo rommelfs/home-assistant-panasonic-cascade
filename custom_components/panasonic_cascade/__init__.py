@@ -11,6 +11,7 @@ from .visibility import async_apply_dhw_visibility
 from .notifications import AlarmMonitor
 from .frontend import async_setup_frontend
 from .buffer_charge import async_setup_charge
+from .energy_sources import setup_sources
 
 
 async def async_setup_entry(hass, entry):
@@ -22,6 +23,7 @@ async def async_setup_entry(hass, entry):
     await async_apply_dhw_visibility(hass, entry, coordinator.all_data)
     entry.runtime_data = coordinator
     await async_setup_charge(coordinator)
+    await setup_sources(coordinator, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     async_register_dashboard_service(hass)
     entry.async_on_unload(async_at_started(hass, async_refresh_starts_tables))
@@ -42,6 +44,8 @@ async def async_unload_entry(hass, entry):
     unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unloaded:
         await entry.runtime_data.buffer_charge.async_close()
+        if entry.runtime_data.energy_sources:
+            await entry.runtime_data.energy_sources.close()
     return unloaded
 
 
