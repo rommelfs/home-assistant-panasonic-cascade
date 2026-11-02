@@ -145,6 +145,10 @@ Controls use only the **`pointSetDef` / Set Default** action advertised in point
 
 Temperature limits are conservative: **20–55 °C** for heating, **5–25 °C** for cooling, and **40–60 °C** for domestic hot water. The four heating-curve controls use the captured limits: **20–75 °C** for water endpoints and **−20 to +15 °C** for outdoor endpoints. Tighter controller limits take precedence; water-temperature limits do not restrict the outdoor axis. Numeric setpoints are sent with their °C unit. Sterilization triggers, emergency actions, and arbitrary FIN expressions are not exposed as controls. Actual control availability also depends on server metadata and write permissions.
 
+### Compact dashboard (0.16.0)
+
+The first tab is **At-a-glance**: current WP running estimates, aggregate electrical consumption, PV buffer permission and alarms. Detailed controls/heating curves, temperatures, PV history and diagnostics have their own tabs. Energy retains current power/COP and a compact day/week/month/year/source balance; five labelled buttons open hourly through yearly consumption charts. The runtime tab retains absolute daily starts and the on/off band. Existing generated dashboards migrate after startup with a backup; personal cards move intact to **Eigene Karten**. See [release and migration details](docs/releases/v0.16.0.md).
+
 ### Temporary PV buffer charging
 
 Available since **0.11.0**, disabled by default. Configure verified PV, signed grid/battery power and actual buffer temperature sources under **Configure → Configure temporary PV buffer charging**. Use **PV-Pufferladung starten/beenden** or the `start_buffer_charge` / `stop_buffer_charge` actions. Optional automatic start waits for stable surplus. The integration persists the original offset before writing, limits the duration and restores the original default on stop, loss of guards, expiry or restart. Failed restoration remains pending; independent operator changes are preserved.

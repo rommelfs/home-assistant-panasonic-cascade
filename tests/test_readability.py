@@ -20,17 +20,17 @@ class ReadabilityTest(unittest.TestCase):
         with patch.object(controls.dashboard.er,'async_get',return_value=registry),patch.object(controls.dashboard.dr,'async_get',return_value=devices):
             config=controls.dashboard.build_dashboard(hass)
         overview=config['views'][0]
-        power=next(c for c in overview['cards'] if c.get('title')=='Leistung')
+        power=next(c for v in config['views'] if v['path']=='energy' for c in v['cards'] if c.get('title')=='Leistung')
         self.assertEqual(power['entities'][0]['name'],'WP 1 · Strom')
-        history=next(c for c in overview['cards'] if c.get('title')=='Leistungsverlauf')
+        history=next(c for v in config['views'] if v['path']=='runtime' for c in v['cards'] if c.get('title')=='Leistungsverlauf')
         self.assertEqual(history['entities'][0]['name'],'WP 1 · Strom')
         details=next(v for v in config['views'] if v['path']=='details')
         detail=next(c for c in details['cards'] if c.get('title')=='WP 1')
         self.assertEqual(next(r for r in detail['entities'] if r['entity']=='sensor.power')['name'],'Strom')
         old=deepcopy(config)
-        next(c for c in old['views'][0]['cards'] if c.get('title')=='Leistung')['entities'][0]['name']='Strom'
+        next(c for v in old['views'] if v['path']=='energy' for c in v['cards'] if c.get('title')=='Leistung')['entities'][0]['name']='Strom'
         refreshed=controls.dashboard.refresh_generated_cards(old,config,registry)
-        self.assertEqual(next(c for c in refreshed['views'][0]['cards'] if c.get('title')=='Leistung')['entities'][0]['name'],'WP 1 · Strom')
+        self.assertEqual(next(c for v in refreshed['views'] if v['path']=='energy' for c in v['cards'] if c.get('title')=='Leistung')['entities'][0]['name'],'WP 1 · Strom')
     def test_context_replaces_paths_without_removing_measurement_identity(self):
         self.assertEqual(display_label('HP 02 - Sub Unit – Point Group – Water Temperature - Outlet','WP 2'),'Vorlauf')
         self.assertEqual(display_label('HP 01 - Main – Heizen – Aufgenommene Energie'),'WP 1 Heizen · Strom')

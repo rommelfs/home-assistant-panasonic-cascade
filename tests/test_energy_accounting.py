@@ -106,9 +106,10 @@ class EnergyDashboardTest(unittest.TestCase):
         with patch.object(dashboard.er,'async_get',return_value=registry),patch.object(dashboard.dr,'async_get',return_value=devices):
             config=dashboard.build_dashboard(hass)
         energy=next(v for v in config['views'] if v['path']=='energy')
-        cards=energy['cards']
+        cards=[c for v in config['views'] if v['path'].startswith('energy') for c in v.get('cards',[])]
         source_cards=[c for c in cards if c.get('title','').startswith('WP · Stromherkunft')]
-        self.assertEqual(len(source_cards),13)
+        self.assertEqual(len(source_cards),8)
+        self.assertTrue(any(c.get('title')=='Stromherkunft · Bilanz' for c in cards))
         self.assertTrue(all(len(c['entities'])==3 for c in source_cards if 'entities' in c))
         self.assertEqual({c['period'] for c in source_cards if c['type']=='statistics-graph'}, {'hour','day','week','month','year'})
         for card in source_cards:

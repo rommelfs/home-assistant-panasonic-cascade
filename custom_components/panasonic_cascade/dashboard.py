@@ -16,6 +16,7 @@ from .const import DOMAIN
 from .model import name, model_key
 from .labels import compact_label, display_label
 from .zinc import reference
+from .dashboard_layout import organise_dashboard, bind_dashboard_paths
 
 SERVICE = "populate_dashboard"
 LOGGER = logging.getLogger(__name__)
@@ -320,7 +321,7 @@ def build_dashboard(hass, entry_id=None):
     if pv_cards:
         pv_cards.insert(0, {'type':'markdown','content':'Das Band zeigt die bestätigte PV-Ladefreigabe. Unbekannt bedeutet, dass die Wirkung beziehungsweise Rückstellung nicht bestätigt ist. Verdichterlaufzeiten sind separat unter Laufzeiten & Taktung zu finden. Historie beginnt mit der Installation; Recorder muss diese Entitäten aufzeichnen.'})
         config['views'].append({'title':'PV-Pufferladung','path':'pv-buffer','icon':'mdi:solar-power-variant','cards':pv_cards})
-    return config
+    return organise_dashboard(config, registry, allowed)
 
 
 def polish_dashboard(hass, config, registry=None):
@@ -575,6 +576,11 @@ def refresh_generated_cards(config, generated, registry):
         source = next((v for v in generated.get('views',[]) if v.get('path')==view.get('path')),None)
         if not source:continue
         defaults = {c.get('title'):c for c in source.get('cards',[]) if c.get('title')}
+        if view.get('path')=='overview':
+            from .dashboard_layout import cards as layout_cards
+            defaults.update({c.get('title'):c for v in generated['views'] for c in layout_cards(v) if c.get('title')})
+            if 'Momentanverbrauch' in defaults:defaults.setdefault('Leistung',defaults['Momentanverbrauch'])
+            if 'Leistung während des Betriebs' in defaults:defaults.setdefault('Leistungsverlauf',defaults['Leistung während des Betriebs'])
         for card in walk(view):
             rows = card.get('entities')
             if not isinstance(rows,list):continue
@@ -675,6 +681,8 @@ async def async_refresh_starts_tables(hass):
                     config = refresh_generated_cards(config,generated,registry)
                     config = merge_dashboard(config,generated)
                     config = clean_generated_overview(config,hass)
+                    config = organise_dashboard(config,registry)
+                    config = bind_dashboard_paths(config,url_path)
                 if config != existing:
                     await save_dashboard_backup(hass,url_path,existing)
                     await target.async_save(config)
@@ -727,6 +735,9 @@ async def populate_dashboard(hass, url_path, entry_id=None, overwrite=False, upd
     if update and not empty:
         config = merge_dashboard(refresh_generated_cards(deepcopy(existing),config,er.async_get(hass)), config)
     config = clean_generated_overview(config, hass)
+    if any(v.get('path')=='overview' for v in config.get('views',[])):
+        config = organise_dashboard(config,er.async_get(hass))
+        config = bind_dashboard_paths(config,url_path)
     if config == existing:
         return
     if existing:

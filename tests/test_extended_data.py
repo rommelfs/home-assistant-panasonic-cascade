@@ -170,9 +170,9 @@ class ExtendedEntityTest(unittest.TestCase):
         alarm_view=next(view for view in config['views'] if view['path']=='alarms')
         self.assertIn("state_attr('sensor.user_alarm', 'alarms')", str(alarm_view))
         energy_view=next(view for view in config['views'] if view['path']=='energy')
-        graph=next(card for card in energy_view['cards'] if card['type']=='statistics-graph')
+        graph=next(card for view in config['views'] if view['path'].startswith('energy') for card in view.get('cards',[]) if card['type']=='statistics-graph')
         self.assertEqual([r['entity'] for r in graph['entities']],['sensor.user_counter'])
         self.assertEqual(graph['entities'][0]['name'],'Heizen · Energie')
         overview=config['views'][0]
-        self.assertTrue(any(card.get('title')=='COP' for card in overview['cards']))
-        self.assertFalse(any(card.get('title')=='Leistung' for card in overview['cards']))
+        self.assertTrue(any(card.get('title')=='COP' for card in energy_view['cards']))
+        self.assertEqual(overview['title'],'At-a-glance')

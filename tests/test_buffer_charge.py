@@ -450,18 +450,17 @@ class ChargeOptionsAndDashboardTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(dashboard.er,'async_get',return_value=registry),patch.object(dashboard.dr,'async_get',return_value=devices):
             generated=dashboard.build_dashboard(hass)
         overview=next(v for v in generated['views'] if v['path']=='overview')
-        self.assertEqual([c['type'] for c in overview['cards'][:3]],['conditional','conditional','history-graph'])
-        self.assertEqual(overview['cards'][2]['hours_to_show'],24)
+        summary=[c for section in overview['sections'] for c in section['cards']]
+        self.assertEqual([c['title'] for c in summary],['Momentanes Schalten','Gesamtverbrauch der Kaskade','Pufferfreigabe','Fehler'])
+        self.assertIn('phase',str(summary[2]));self.assertIn('reason',str(summary[2]))
         history=next(v for v in generated['views'] if v['path']=='pv-buffer')
         self.assertIn('168',str(history));self.assertIn('binary_sensor.charge',str(history))
         custom={'type':'history-graph','title':'My electricity','hours_to_show':72,'entities':['sensor.existing_energy']}
         original={'views':[{'path':'overview','cards':[custom]},{'path':'energy','cards':[custom]}]}
-        updated=dashboard.merge_dashboard(original,generated)
-        self.assertEqual(updated['views'][0]['cards'][0]['type'],'conditional')
-        self.assertEqual(updated['views'][0]['cards'][1]['type'],'conditional')
-        self.assertIn(custom,updated['views'][0]['cards'])
-        self.assertEqual(updated['views'][1],original['views'][1])
-        self.assertEqual(updated,dashboard.merge_dashboard(updated,generated))
+        updated=dashboard.organise_dashboard(dashboard.merge_dashboard(original,generated),registry)
+        self.assertIn(custom,next(v for v in updated['views'] if v['path']=='personal')['cards'])
+        self.assertIn(custom,next(v for v in updated['views'] if v['path']=='energy')['cards'])
+        self.assertEqual(updated,dashboard.organise_dashboard(dashboard.merge_dashboard(updated,generated),registry))
 
 
 class ActiveStatusTest(unittest.IsolatedAsyncioTestCase):

@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.16.0](docs/releases/v0.16.0.md)
+
+- Replace the crowded first tab with four at-a-glance cards; group controls, temperatures and diagnostics into their own tabs.
+- Consolidate source-energy absolute values and keep five consumption/source-history periods accessible through native subviews.
+- Back up before migrating; preserve custom cards, graph options, daily starts, on/off history and adaptive PV controls.
+
 ## [0.15.0](docs/releases/v0.15.0.md)
 
 - Add explicitly enabled adaptive automatic PV targets from 45 to 65 °C, bounded to the reference-tested 31-degree buffer offset.

@@ -58,7 +58,7 @@ class DashboardUpdateTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(dashboard.er,'async_get',return_value=registry),patch.object(dashboard.dr,'async_get',return_value=devices):
             config=dashboard.build_dashboard(hass)
         energy=next(v for v in config['views'] if v['path']=='energy')
-        self.assertTrue(any(c['type']=='statistics-graph' and any((r if isinstance(r,str) else r['entity'])=='sensor.energy' for r in c['entities']) for c in energy['cards']))
+        self.assertTrue(any(c['type']=='statistics-graph' and any((r if isinstance(r,str) else r['entity'])=='sensor.energy' for r in c['entities']) for v in config['views'] if v['path'].startswith('energy') for c in v.get('cards',[])))
         self.assertTrue(any(c['type']=='history-graph' and 'sensor.power' in str(c['entities']) for c in energy['cards']))
         runtime=next(v for v in config['views'] if v['path']=='runtime')
         self.assertTrue(any(c['type']=='history-graph' and c['hours_to_show']==24 and 'binary_sensor.running' in str(c['entities']) for c in runtime['cards']))
@@ -79,7 +79,7 @@ class DashboardUpdateTest(unittest.IsolatedAsyncioTestCase):
         with patch.object(dashboard.er,'async_get',return_value=registry),patch.object(dashboard.dr,'async_get',return_value=devices):
             config=dashboard.build_dashboard(hass)
         energy=next(v for v in config['views'] if v['path']=='energy')
-        consumption=[c for c in energy['cards'] if c.get('title','').startswith('Verbrauch von Elektrizität')]
+        consumption=[c for v in config['views'] if v['path'].startswith('energy') for c in v.get('cards',[]) if c.get('title','').startswith('Verbrauch von Elektrizität')]
         self.assertEqual([c['period'] for c in consumption],['hour','day','week','month','year'])
         for card in consumption:
             self.assertEqual(card['stat_types'],['change'])
