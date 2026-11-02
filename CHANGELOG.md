@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.17.1](docs/releases/v0.17.1.md)
+
+- Preserve unrelated custom cards with nested entity mappings during visibility filtering, avoiding an integration setup error.
+
 ## [0.17.0](docs/releases/v0.17.0.md)
 
 - Group heating-curve fields by water/outdoor temperature; plot current outdoor temperature with x/y guides and persistent readings.

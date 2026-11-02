@@ -64,3 +64,12 @@ class SeasonalDisplayTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(model.operating_mode({'tankModelId': 'x:hotWater'}))
         self.assertEqual(model.operating_mode({'dis': 'WP 1 | Energy | Cold Water | COP'}), 'cool')
         self.assertEqual(model.operating_mode({}, 'runningUnitsAmountHot'), 'heat')
+
+    def test_unrelated_custom_card_nested_entity_map_is_preserved(self):
+        config = {"views": [{"cards": [{"type": "grid", "cards": [
+            {"type": "custom:other-card", "entities": {"first": {"entity": "sensor.other"}, "options": [1, 2]}},
+            {"type": "custom:panasonic-cascade-heating-curve", "entities": {"water_max": "sensor.heat"}}
+        ]}]}]}
+        filtered = visibility.without_dhw(config, {"sensor.heat"})
+        self.assertEqual(len(filtered["views"][0]["cards"][0]["cards"]), 1)
+        self.assertEqual(filtered["views"][0]["cards"][0]["cards"][0], config["views"][0]["cards"][0]["cards"][0])

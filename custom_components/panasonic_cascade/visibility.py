@@ -34,7 +34,7 @@ def without_dhw(config, hidden):
         # Native conditional cards can wrap a single child instead of a stack.
         if isinstance(container.get("card"), dict) and not prune(container["card"]):
             return False
-        if isinstance(container.get("entities"), dict) and any(ident in hidden for ident in container["entities"].values()):
+        if isinstance(container.get("entities"), dict) and any(isinstance(ident, str) and ident in hidden for ident in container["entities"].values()):
             return False
         if isinstance(container.get("entities"), list):
             container["entities"] = [row for row in container["entities"]
