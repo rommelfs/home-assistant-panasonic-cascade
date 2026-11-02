@@ -70,7 +70,8 @@
           "power_threshold_w": "Cycling: electrical power threshold per heat pump (W)",
           "configure_pv_charge": "Configure temporary PV buffer charging",
           "configure_energy_sources": "Configure electricity-source measurements",
-          "energy_sources_enabled": "Record WP electricity attribution to PV/grid/battery"
+          "energy_sources_enabled": "Record WP electricity attribution to PV/grid/battery",
+          "display_mode": "Display mode (does not change the controller)"
         }
       },
       "pv_charge": {
@@ -127,6 +128,15 @@
       "energy_sources_missing": "Select all three power measurements.",
       "pv_charge_grid_limits": "The immediate-stop threshold must be at least the measurement tolerance.",
       "pv_charge_adaptive_limits": "Adaptive charging requires a temperature sensor and a stop limit of 40–65 °C."
+    }
+  },
+  "selector": {
+    "display_mode": {
+      "options": {
+        "heat": "Heating (winter)",
+        "cool": "Cooling (summer)",
+        "both": "Heating and cooling"
+      }
     }
   }
 }

@@ -16,8 +16,8 @@ from homeassistant.helpers.start import async_at_started
 from .const import DOMAIN
 
 LEGACY_CARD_URL = '/panasonic_cascade/heating-curve.js'
-CARD_URL = '/panasonic_cascade/heating-curve-0.10.0.js'
-CARD_VERSION = '0.10.0'
+CARD_URL = '/panasonic_cascade/heating-curve-0.17.0.js'
+CARD_VERSION = '0.17.0'
 LOGGER = logging.getLogger(__name__)
 
 
@@ -37,6 +37,7 @@ async def async_setup_frontend(hass):
         if not hass.data.get(f'{DOMAIN}_frontend_ready'):
             await hass.http.async_register_static_paths([
                 StaticPathConfig(CARD_URL, str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),
+                StaticPathConfig('/panasonic_cascade/heating-curve-0.10.0.js', str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),
                 StaticPathConfig('/panasonic_cascade/heating-curve-0.8.1.js', str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),
                 StaticPathConfig('/panasonic_cascade/heating-curve-0.8.0.js', str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),
                 StaticPathConfig('/panasonic_cascade/heating-curve-0.7.0.js', str(Path(__file__).parent / 'www' / 'heating-curve.js'), False),

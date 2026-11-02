@@ -70,7 +70,8 @@
           "power_threshold_w": "Taktung: Leistungsschwelle je WP (W)",
           "configure_pv_charge": "PV-Pufferladung konfigurieren",
           "configure_energy_sources": "Messquellen der Stromherkunft konfigurieren",
-          "energy_sources_enabled": "PV-/Netz-/Batterie-Zuordnung für WP erfassen"
+          "energy_sources_enabled": "PV-/Netz-/Batterie-Zuordnung für WP erfassen",
+          "display_mode": "Anzeigebetrieb (ändert nicht die Anlage)"
         }
       },
       "pv_charge": {
@@ -127,6 +128,15 @@
       "energy_sources_missing": "Alle drei Leistungsquellen auswählen.",
       "pv_charge_grid_limits": "Die Sofort-Abbruchgrenze muss mindestens der Messtoleranz entsprechen.",
       "pv_charge_adaptive_limits": "Adaptive Ladung benötigt einen Temperaturfühler und eine Abschaltgrenze von 40 bis 65 °C."
+    }
+  },
+  "selector": {
+    "display_mode": {
+      "options": {
+        "heat": "Heizen (Winter)",
+        "cool": "Kühlen (Sommer)",
+        "both": "Heizen und Kühlen"
+      }
     }
   }
 }

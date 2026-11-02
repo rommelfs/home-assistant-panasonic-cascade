@@ -7,7 +7,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.exceptions import HomeAssistantError
 
 from .const import DOMAIN
-from .model import is_dhw
+from .model import is_dhw, operating_mode
 
 LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +33,8 @@ def without_dhw(config, hidden):
             return False
         # Native conditional cards can wrap a single child instead of a stack.
         if isinstance(container.get("card"), dict) and not prune(container["card"]):
+            return False
+        if isinstance(container.get("entities"), dict) and any(ident in hidden for ident in container["entities"].values()):
             return False
         if isinstance(container.get("entities"), list):
             container["entities"] = [row for row in container["entities"]
@@ -125,4 +127,63 @@ async def async_apply_dhw_visibility(hass, entry, rows):
             continue
         except HomeAssistantError:
             LOGGER.warning("Could not update DHW visibility for dashboard %s", path)
+    await store.async_save(saved)
+
+
+async def async_apply_mode_visibility(hass, entry, rows):
+    """Hide seasonal rows reversibly, retaining telemetry, history and automation IDs."""
+    mode = entry.options.get("display_mode", "both")
+    if mode not in ("heat", "cool", "both"):
+        mode = "both"
+    registry = er.async_get(hass)
+    store = Store(hass, 1, f"{DOMAIN}.mode_visibility.{entry.entry_id}")
+    saved = await store.async_load() or {"entities": [], "dashboards": {}}
+    prefix = entry.unique_id + "|"
+    hidden = set()
+    for entity in registry.entities.values():
+        if entity.platform != DOMAIN or entity.config_entry_id != entry.entry_id or not entity.unique_id.startswith(prefix):
+            continue
+        ident, _, field = entity.unique_id[len(prefix):].partition("|")
+        specific = operating_mode(rows.get(ident, {}), field.split("|")[0], rows)
+        if mode != "both" and specific and specific != mode:
+            hidden.add(entity.entity_id)
+    # Keep our saved classification if a controller point is temporarily missing.
+    if saved.get("mode") == mode:
+        hidden.update(saved["entities"])
+    owned = set(saved["entities"])
+    for entity_id in owned - hidden:
+        entity = registry.entities.get(entity_id)
+        if entity and entity.hidden_by == er.RegistryEntryHider.INTEGRATION:
+            registry.async_update_entity(entity_id, hidden_by=None)
+    owned.intersection_update(hidden)
+    for entity_id in hidden:
+        entity = registry.entities.get(entity_id)
+        if entity and entity.hidden_by is None:
+            registry.async_update_entity(entity_id, hidden_by=er.RegistryEntryHider.INTEGRATION)
+            owned.add(entity_id)
+    saved["entities"] = sorted(owned)
+    saved["mode"] = mode
+    from homeassistant.components.lovelace.const import LOVELACE_DATA
+    from homeassistant.components.lovelace.dashboard import ConfigNotFound
+    lovelace = hass.data.get(LOVELACE_DATA)
+    for path, target in (lovelace.dashboards.items() if lovelace else []):
+        if target.mode != "storage":
+            continue
+        key = path if path is not None else "@default"
+        try:
+            current = await target.async_load(False)
+            backup = saved["dashboards"].get(key)
+            base = backup["before"] if backup and current == backup["after"] else current
+            # Respect DHW and seasonal filtering from other installations too.
+            all_hidden = {e.entity_id for e in registry.entities.values()
+                          if e.platform == DOMAIN and e.hidden_by == er.RegistryEntryHider.INTEGRATION}
+            filtered = without_dhw(base, all_hidden)
+            if filtered != current:
+                saved["dashboards"][key] = {"before": base, "after": filtered}
+                await store.async_save(saved)
+                await target.async_save(filtered)
+        except ConfigNotFound:
+            continue
+        except HomeAssistantError:
+            LOGGER.warning("Could not update seasonal visibility for dashboard %s", path)
     await store.async_save(saved)

@@ -9,7 +9,7 @@ if (typeof document !== 'undefined' && document.querySelector('home-assistant'))
     await new Promise(resolve => setTimeout(resolve, 25));
   }
 }
-export const KEYS = ['water_max', 'outdoor_max', 'water_min', 'outdoor_min'];
+export const KEYS = ['water_max', 'water_min', 'outdoor_max', 'outdoor_min'];
 export function temperatureAt(outdoor, v) {
   if (!KEYS.every(k => Number.isFinite(v[k])) || v.outdoor_min >= v.outdoor_max || v.water_min > v.water_max) return null;
   const ratio = Math.max(0, Math.min(1, (outdoor - v.outdoor_min) / (v.outdoor_max - v.outdoor_min)));
@@ -19,17 +19,18 @@ const LABELS = {
   en: { water_max: 'Max. water temperature', outdoor_max: 'Max. outdoor temperature', water_min: 'Min. water temperature', outdoor_min: 'Min. outdoor temperature',
     title: 'Zone 1 – Heating curve', apply: 'Apply', reset: 'Discard preview', preview: 'Preview — changes not applied', waiting: 'Waiting for controller values…',
     saved: 'Defaults sent. Schedules or overrides may change effective operation.', read: 'Read-only. Enable experimental controls to edit.', unavailable: 'Controller values unavailable.', invalid: 'Check limits: min. outdoor must be below max.; min. water must not exceed max.', water: 'Water', outdoor: 'Outdoor', failed: 'Could not apply all values. Check the controller before retrying.',
-    current: 'Configured curve', saving: 'Applying…' },
+    live: 'Current outdoor temperature → curve target', probe: 'Read curve', missing: 'Outdoor temperature unavailable', current: 'Configured curve', saving: 'Applying…' },
   de: { water_max: 'Max. Wassertemperatur', outdoor_max: 'Max. Außentemperatur', water_min: 'Min. Wassertemperatur', outdoor_min: 'Min. Außentemperatur',
     title: 'Zone 1 – Heizkurve', apply: 'Übernehmen', reset: 'Vorschau verwerfen', preview: 'Vorschau – noch nicht übernommen', waiting: 'Warte auf Controllerwerte…',
     saved: 'Standardwerte gesendet. Zeitprogramme oder Übersteuerungen können abweichen.', read: 'Nur Anzeige. Zum Bearbeiten experimentelle Steuerungen aktivieren.', unavailable: 'Controllerwerte nicht verfügbar.', invalid: 'Grenzen prüfen: Min. außen muss unter Max. liegen; Min. Wasser darf Max. nicht überschreiten.', water: 'Wasser', outdoor: 'Außen', failed: 'Nicht alle Werte übernommen. Vor erneutem Versuch im Controller prüfen.',
-    current: 'Eingestellte Kurve', saving: 'Wird übernommen…' }
+    live: 'Außentemperatur jetzt → Kurven-Sollwert', probe: 'Kurve ablesen', missing: 'Außentemperatur nicht verfügbar', current: 'Eingestellte Kurve', saving: 'Wird übernommen…' }
 };
 export class HeatingCurveCard extends HTMLElement {
   constructor() { super(); this.attachShadow({mode: 'open'}); this._draft = {}; this._pending = {}; }
   setConfig(config) {
     if (!config.entities || !KEYS.every(k => /^(number|sensor)\.[a-z0-9_]+$/.test(config.entities[k] || ''))) throw new Error('Four heating curve entities are required');
-    this._config = config; this._draft = {}; this._pending = {}; this._built = false;
+    if (config.outdoor_temperature_entity && !/^sensor\.[a-z0-9_]+$/.test(config.outdoor_temperature_entity)) throw new Error('Outdoor temperature must be a sensor');
+    this._selectedOutdoor = null; this._config = config; this._draft = {}; this._pending = {}; this._built = false;
     if (this._hass) this._render();
   }
   set hass(hass) {
@@ -60,11 +61,11 @@ export class HeatingCurveCard extends HTMLElement {
       this.shadowRoot.innerHTML = `<style>
         :host{display:block;container-type:inline-size}ha-card{display:block;padding:20px;color:var(--primary-text-color,#222);background:var(--ha-card-background,var(--card-background-color,#fff));border-radius:var(--ha-card-border-radius,12px)}
         h2{font-size:20px;font-weight:500;margin:0 0 20px}.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}label{font-size:14px;display:flex;flex-direction:column;gap:6px}input{box-sizing:border-box;width:100%;padding:10px;font:inherit;color:inherit;background:var(--secondary-background-color,#f5f5f5);border:1px solid var(--divider-color,#ccc);border-radius:6px}input:disabled{opacity:.7}
-        svg{width:100%;height:auto;display:block;margin-top:14px;touch-action:pan-y}.grid{stroke:var(--divider-color,#ddd);stroke-width:1}.axis{fill:var(--secondary-text-color,#666);font:14px sans-serif}.curve{fill:none;stroke:var(--primary-color,#ef852b);stroke-width:3}.dot{fill:var(--primary-color,#ef852b)}
-        .status{font-size:13px;min-height:2.6em;color:var(--secondary-text-color,#666)}.status.error{color:var(--error-color,#b00020)}.readout{font-variant-numeric:tabular-nums;text-align:center;min-height:1.4em;font-size:14px}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}button{padding:10px 14px;border:1px solid var(--primary-color,#267ab5);border-radius:6px;font:inherit;background:transparent;color:var(--primary-color,#267ab5);cursor:pointer}button:disabled{opacity:.45;cursor:default}button:first-child{background:var(--primary-color,#267ab5);color:var(--text-primary-color,#fff)}
+        svg{width:100%;height:auto;display:block;margin-top:14px;touch-action:pan-y}.grid{stroke:var(--divider-color,#ddd);stroke-width:1}.axis{fill:var(--secondary-text-color,#666);font:14px sans-serif}.curve{fill:none;stroke:var(--primary-color,#ef852b);stroke-width:3}.dot{fill:var(--primary-color,#ef852b)}.guide{fill:none;stroke:var(--primary-text-color,#222);stroke-width:1.5;stroke-dasharray:5 4}.live-guide{stroke:var(--success-color,#138443)}.live-dot{fill:var(--success-color,#138443);stroke:var(--card-background-color,#fff);stroke-width:2}.probe-dot{fill:var(--primary-text-color,#222)}
+        .status{font-size:13px;min-height:2.6em;color:var(--secondary-text-color,#666)}.status.error{color:var(--error-color,#b00020)}.readout,.live-readout{font-variant-numeric:tabular-nums;text-align:center;min-height:2.8em;font-size:14px;line-height:1.4}.live-readout{font-weight:600}.reading-values{display:block;white-space:nowrap}.readout{color:var(--secondary-text-color,#666)}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}button{padding:10px 14px;border:1px solid var(--primary-color,#267ab5);border-radius:6px;font:inherit;background:transparent;color:var(--primary-color,#267ab5);cursor:pointer}button:disabled{opacity:.45;cursor:default}button:first-child{background:var(--primary-color,#267ab5);color:var(--text-primary-color,#fff)}
         @container(max-width:480px){.axis{font-size:24px}}
         @media(max-width:380px){ha-card{padding:14px}.fields{gap:10px}label{font-size:12px}}
-        </style><ha-card><h2></h2><div class="fields">${KEYS.map(k => `<label><span data-label="${k}"></span><input type="number" data-key="${k}" step="1"></label>`).join('')}</div><svg viewBox="0 0 680 300" role="img"></svg><div class="readout"></div><div class="status" role="status" aria-live="polite"></div><div class="actions"><button class="apply"></button><button class="reset"></button></div></ha-card>`;
+        </style><ha-card><h2></h2><div class="fields">${KEYS.map(k => `<label><span data-label="${k}"></span><input type="number" data-key="${k}" step="1"></label>`).join('')}</div><svg viewBox="0 0 680 300" role="img"></svg><div class="live-readout"></div><div class="readout"></div><div class="status" role="status" aria-live="polite"></div><div class="actions"><button class="apply"></button><button class="reset"></button></div></ha-card>`;
       for (const input of this.shadowRoot.querySelectorAll('input')) input.addEventListener('input', () => { this._draft[input.dataset.key] = input.value; this._message = ''; this._error = false; this._draw(); });
       this.shadowRoot.querySelector('.apply').addEventListener('click', () => this._apply());
       this.shadowRoot.querySelector('.reset').addEventListener('click', () => { this._draft = {}; this._pending = {}; this._message = ''; this._error = false; this._render(); });
@@ -73,11 +74,11 @@ export class HeatingCurveCard extends HTMLElement {
         const {values, valid} = this._values(); if (!valid) return;
         const box = svg.getBoundingClientRect(), x = (event.clientX - box.left) * 680 / box.width;
         const outdoor = this._axisMin + Math.max(0, Math.min(1, (x - 60) / 590)) * (this._axisMax - this._axisMin);
-        this.shadowRoot.querySelector('.readout').textContent = `${t.outdoor}: ${outdoor.toFixed(1)} °C → ${t.water}: ${temperatureAt(outdoor, values).toFixed(1)} °C`;
+        this._selectedOutdoor = Math.round(outdoor * 10) / 10; this._draw();
       };
       svg.addEventListener('pointermove', readPoint);
       svg.addEventListener('pointerdown', readPoint);
-      svg.addEventListener('pointerleave', () => { this.shadowRoot.querySelector('.readout').textContent = ''; });
+      // Keep the chosen point on leave and on subsequent HA state updates.
       this._built = true;
     }
     this.shadowRoot.querySelector('h2').textContent = this._config.title || t.title;
@@ -95,7 +96,6 @@ export class HeatingCurveCard extends HTMLElement {
   }
   _draw() {
     const {values: v, available, valid} = this._values(), t = this._t;
-    this.shadowRoot.querySelector('.readout').textContent = '';
     const dirty = Object.keys(this._draft).length > 0, pending = Object.keys(this._pending).length > 0;
     const editable = KEYS.every(k => this._config.entities[k].startsWith('number.'));
     this.shadowRoot.querySelector('.apply').disabled = !valid || !dirty || !editable || this._saving || pending;
@@ -104,8 +104,9 @@ export class HeatingCurveCard extends HTMLElement {
     status.textContent = !available ? t.unavailable : this._message || (!valid ? t.invalid : pending ? t.waiting : dirty ? t.preview : editable ? t.current : t.read);
     status.classList.toggle('error', !available || !valid || this._error);
     const svg = this.shadowRoot.querySelector('svg'); svg.setAttribute('aria-label', `${t.title}. ${status.textContent}`);
-    if (!valid) { svg.replaceChildren(); this.shadowRoot.querySelector('.readout').textContent = ''; return; }
-    const xmin = Math.floor((v.outdoor_min - 5) / 5) * 5, xmax = Math.ceil((v.outdoor_max + 5) / 5) * 5;
+    if (!valid) { svg.replaceChildren(); this.shadowRoot.querySelector('.readout').textContent = ''; this.shadowRoot.querySelector('.live-readout').textContent = ''; return; }
+    const live = this._outdoor();
+    const xmin = Math.floor((Math.min(v.outdoor_min, live ?? v.outdoor_min) - 5) / 5) * 5, xmax = Math.ceil((Math.max(v.outdoor_max, live ?? v.outdoor_max) + 5) / 5) * 5;
     this._axisMin = xmin; this._axisMax = xmax;
     const ymin = Math.floor((v.water_min - 3) / 5) * 5, ymax = Math.ceil((v.water_max + 3) / 5) * 5;
     const x = n => 60 + (n - xmin) / (xmax - xmin) * 590, y = n => 245 - (n - ymin) / (ymax - ymin) * 210;
@@ -120,7 +121,24 @@ export class HeatingCurveCard extends HTMLElement {
     const pairs = [[xmin,v.water_max],[v.outdoor_min,v.water_max],[v.outdoor_max,v.water_min],[xmax,v.water_min]];
     content += `<polyline class="curve" points="${pairs.map(([a,b]) => `${x(a)},${y(b)}`).join(' ')}"/>`;
     for (const [a,b] of pairs.slice(1,3)) content += `<circle class="dot" cx="${x(a)}" cy="${y(b)}" r="4"/><text class="axis" x="${x(a)}" y="${y(b)-10}" text-anchor="middle">${a} / ${b} °C</text>`;
+    const selected = Number.isFinite(this._selectedOutdoor) ? this._selectedOutdoor : null;
+    if (selected !== null) {
+      const a = Math.max(xmin, Math.min(xmax, selected)), b = temperatureAt(a, v);
+      content += `<path class="guide" d="M60,${y(b)}H${x(a)}V245"/><circle class="probe-dot" cx="${x(a)}" cy="${y(b)}" r="4"/>`;
+    }
+    if (live !== null) content += `<path class="guide live-guide" d="M60,${y(temperatureAt(live,v))}H${x(live)}V245"/><circle class="live-dot" cx="${x(live)}" cy="${y(temperatureAt(live,v))}" r="7"><title>${t.live}: ${live.toFixed(1)} °C / ${temperatureAt(live,v).toFixed(1)} °C</title></circle>`;
     svg.innerHTML = content;
+    const reading = (label, a) => `${label}<span class="reading-values">${t.outdoor}: ${a.toFixed(1)} °C → ${t.water}: ${temperatureAt(a,v).toFixed(1)} °C</span>`;
+    this.shadowRoot.querySelector('.live-readout').innerHTML = live === null ? t.missing : reading(t.live, live);
+    this.shadowRoot.querySelector('.readout').innerHTML = selected === null ? '' : reading(t.probe, selected);
+  }
+  _outdoor() {
+    const state = this._hass.states[this._config.outdoor_temperature_entity];
+    if (!state || !['°C', '°F'].includes(state.attributes.unit_of_measurement) || state.state.trim() === '') return null;
+    let n = Number(state.state);
+    if (!Number.isFinite(n)) return null;
+    if (state.attributes.unit_of_measurement === '°F') n = (n - 32) * 5 / 9;
+    return n >= -60 && n <= 65 ? n : null;
   }
   async _apply() {
     const {values, valid} = this._values();

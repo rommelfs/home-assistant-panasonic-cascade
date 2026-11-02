@@ -178,6 +178,7 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             vol.Required('configure_pv_charge', default=False): bool,
             vol.Required('configure_energy_sources', default=False): bool,
             vol.Required('energy_sources_enabled', default=d.get('energy_sources_enabled', True)): bool,
+            vol.Required('display_mode', default=d.get('display_mode', 'both')): selector.SelectSelector(selector.SelectSelectorConfig(options=['heat', 'cool', 'both'], translation_key='display_mode')),
             vol.Required('use_dhw', default=d.get('use_dhw', True)): bool,
             vol.Required('power_threshold_w', default=d.get('power_threshold_w', 200)): vol.All(vol.Coerce(int), vol.Range(min=50, max=5000)),
             vol.Required('alarm_notify_service', default=d.get('alarm_notify_service', '')): selector.SelectSelector(selector.SelectSelectorConfig(options=targets)),

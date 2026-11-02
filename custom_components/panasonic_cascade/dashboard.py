@@ -55,10 +55,15 @@ def heating_curve_cards(entries, entities):
                 continue
             key, equipment = points[ident]
             groups.setdefault(equipment, {})[key] = entity.entity_id
+        outdoor_ids = {ident for ident, row in data.items() if model_key(row).casefold() in ('outdooractualtemperature', 'outdoorairtemperature')}
+        outdoor = next((entity.entity_id for entity in entities
+                        if entity.config_entry_id == entry.entry_id and entity.domain == 'sensor'
+                        and entity.unique_id in {entry.unique_id + '|' + ident + '|curVal' for ident in outdoor_ids}), None)
         for values in groups.values():
             if len(values) == 4:
                 cards.append({"type": "custom:panasonic-cascade-heating-curve",
-                              "title": "Zone 1 – Heizkurve", "entities": values})
+                              "title": "Zone 1 – Heizkurve", "entities": values,
+                              **({"outdoor_temperature_entity": outdoor} if outdoor else {})})
     return cards
 
 
@@ -582,6 +587,10 @@ def refresh_generated_cards(config, generated, registry):
             if 'Momentanverbrauch' in defaults:defaults.setdefault('Leistung',defaults['Momentanverbrauch'])
             if 'Leistung während des Betriebs' in defaults:defaults.setdefault('Leistungsverlauf',defaults['Leistung während des Betriebs'])
         for card in walk(view):
+            if card.get('type') == 'custom:panasonic-cascade-heating-curve':
+                new = next((c for c in source.get('cards', []) if c.get('type') == card['type'] and c.get('entities') == card.get('entities')), None)
+                if new and new.get('outdoor_temperature_entity'):
+                    card['outdoor_temperature_entity'] = new['outdoor_temperature_entity']
             rows = card.get('entities')
             if not isinstance(rows,list):continue
             ids = [r if isinstance(r,str) else r.get('entity') for r in rows if isinstance(r,(str,dict))]

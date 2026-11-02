@@ -95,9 +95,13 @@ class HeatingCurveHATest(unittest.IsolatedAsyncioTestCase):
                     entities.append(SimpleNamespace(config_entry_id=str(index),domain=domain,
                         entity_id=f'{domain}.renamed_{index}_{key}_2',
                         unique_id=f'install{index}|{key}|curVal'+('|control' if domain=='number' else '')))
+        for i, entry in enumerate(entries):
+            entry.runtime_data.data['outside'] = {'siteModelId': '_site:outdoorActualTemperature'}
+            entities.append(SimpleNamespace(config_entry_id=str(i), domain='sensor', entity_id=f'sensor.outside_{i}', unique_id=f'install{i}|outside|curVal'))
         cards = dashboard.heating_curve_cards(entries,entities)
         self.assertEqual(len(cards),2)
         for i, card in enumerate(cards):
+            self.assertEqual(card['outdoor_temperature_entity'], f'sensor.outside_{i}')
             self.assertEqual(card['entities'], {key:f'number.renamed_{i}_{key}_2' for key in MODELS})
         sensors = [e for e in entities if e.domain=='sensor']
         self.assertTrue(all(e.startswith('sensor.') for e in dashboard.heating_curve_cards(entries,sensors)[0]['entities'].values()))

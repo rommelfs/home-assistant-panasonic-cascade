@@ -1,5 +1,6 @@
 """Point classification kept independent of Home Assistant for fixture testing."""
 import math
+import re
 from .const import BOOL_CONTROLS, ENUM_CONTROLS, NUMBER_CONTROLS
 from .zinc import MARKER, Number, Ref, value
 
@@ -188,3 +189,35 @@ def visible_data(rows, use_dhw=True):
 def invalid_temperature(row):
     raw = row.get("curVal")
     return isinstance(raw, Number) and unit(row) in ("°C", "°F") and raw.value == -32768
+
+
+def operating_mode(row, field="curVal", rows=None):
+    """Classify only mode-specific telemetry; shared plant/DHW points stay visible."""
+    if is_dhw(row, field, rows):
+        return None
+    if field.endswith("Cold"):
+        return "cool"
+    if field.endswith("Hot"):
+        return "heat"
+    seen = set()
+    while row:
+        key = model_key(row)
+        tokens = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", key).casefold().split()
+        # 'heatPump' is equipment, not a heating-only value.
+        if key != "heatPump":
+            if any(token in tokens for token in ("cool", "cold")):
+                return "cool"
+            if any(token in tokens for token in ("heat", "hot")):
+                return "heat"
+        label = str(row.get("dis", "")).casefold()
+        if any(word in label for word in ("kühlen", "cold water")):
+            return "cool"
+        if any(word in label for word in ("heizen", "hot water")):
+            return "heat"
+        parent = row.get("equipRef")
+        ident = parent.id if isinstance(parent, Ref) else None
+        if not rows or not ident or ident in seen:
+            break
+        seen.add(ident)
+        row = rows.get(ident, {})
+    return None

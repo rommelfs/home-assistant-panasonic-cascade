@@ -7,7 +7,7 @@ from .api import CascadeClient
 from .const import PLATFORMS
 from .coordinator import CascadeCoordinator
 from .dashboard import async_register_dashboard_service, async_refresh_starts_tables
-from .visibility import async_apply_dhw_visibility
+from .visibility import async_apply_dhw_visibility, async_apply_mode_visibility
 from .notifications import AlarmMonitor
 from .frontend import async_setup_frontend
 from .buffer_charge import async_setup_charge
@@ -25,6 +25,8 @@ async def async_setup_entry(hass, entry):
     await async_setup_charge(coordinator)
     await setup_sources(coordinator, entry)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    if entry.options.get("display_mode", "both") != "both" or entry.options.get("display_mode"):
+        await async_apply_mode_visibility(hass, entry, coordinator.all_data)
     async_register_dashboard_service(hass)
     entry.async_on_unload(async_at_started(hass, async_refresh_starts_tables))
     async def refresh_dashboard(_):
