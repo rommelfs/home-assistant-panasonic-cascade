@@ -85,7 +85,11 @@ class LayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn('—',rendered);self.assertNotIn('6.0',rendered)
         for v in config['views']:
             for c in cards(v):
-                if MARKER in c.get('content',''):Template(c['content'],hass).async_render(parse_result=False)
+                if MARKER in c.get('content',''):
+                    text=Template(c['content'],hass).async_render(parse_result=False)
+                    if c.get('title')=='Stromherkunft · Bilanz':
+                        import re
+                        self.assertRegex(text,r'\| Zeitraum[^\n]*(?:\n\|[^\n]*){6}')
 
     async def test_panel_and_unowned_dashboard_remain_unchanged(self):
         registry,_=self.fixture()
@@ -93,3 +97,11 @@ class LayoutTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(organise_dashboard(panel,registry),panel)
         unowned={'views':[{'path':'overview','cards':[{'type':'entities','entities':['sensor.private_solar']}]}]}
         self.assertEqual(organise_dashboard(unowned,registry),unowned)
+
+    async def test_generated_instantaneous_copy_does_not_create_personal_tab(self):
+        registry,config=self.fixture()
+        energy=next(v for v in config['views'] if v['path']=='energy')
+        duplicate=deepcopy(next(c for c in cards(energy) if c.get('title')=='Momentanverbrauch'))
+        config['views'].append({'path':'personal','title':'Eigene Karten','cards':[duplicate]})
+        cleaned=organise_dashboard(config,registry)
+        self.assertNotIn('personal',[v['path'] for v in cleaned['views']])

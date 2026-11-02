@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.16.1](docs/releases/v0.16.1.md)
+
+- Keep source-balance Markdown rows contiguous after template rendering and hide unavailable current-attribution rows until measurements recover.
+
 ## [0.16.0](docs/releases/v0.16.0.md)
 
 - Replace the crowded first tab with four at-a-glance cards; group controls, temperatures and diagnostics into their own tabs.

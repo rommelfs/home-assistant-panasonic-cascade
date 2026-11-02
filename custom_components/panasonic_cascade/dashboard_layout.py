@@ -50,7 +50,7 @@ def energy_table(periods):
         ids = [periods.get(period, {}).get(k) for k in ('pv','grid','battery')]
         if not all(ids):
             continue
-        content += '{% set values = [' + ','.join("states('"+i+"') | float(none)" for i in ids) + '] %}\n'
+        content += '{% set values = [' + ','.join("states('"+i+"') | float(none)" for i in ids) + '] -%}\n'
         content += '| ' + label + ' | {% for v in values %}{{ v | round(2) if v is not none else "—" }} | {% endfor %}{{ values | sum | round(2) if none not in values else "—" }} |\n'
     return {'type':'markdown', 'title':'Stromherkunft · Bilanz', 'content':content}
 
@@ -91,7 +91,7 @@ def organise_dashboard(config, registry, owners=None):
         else:
             destination.setdefault('cards', []).append(card)
 
-    managed = {'Steuerung':'settings', 'Leistung':'energy', 'COP':'energy',
+    managed = {'Steuerung':'settings', 'Leistung':'energy', 'Momentanverbrauch':'energy', 'COP':'energy',
                'Aktuelle Temperaturen':'temperatures', 'Temperaturverlauf':'temperatures',
                'Leistungsverlauf':'runtime', 'Betriebszustand':'details', 'Alarme':'alarms',
                'PV-Pufferladung · Freigabe (24 h)':'pv-buffer'}
@@ -189,6 +189,12 @@ def organise_dashboard(config, registry, owners=None):
                 existing=next((c for c in cards(energy) if c.get('title')==table['title'] and MARKER in c.get('content','')),None)
                 if existing is not None:existing.update(table)
                 else:append(energy,table)
+        for container in [energy]+energy.get('sections',[]):
+            for i,c in enumerate(container.get('cards',[])):
+                if c.get('type')=='entities' and c.get('title','').startswith('WP · Stromherkunft · Aktuell'):
+                    container['cards'][i]={'type':'entity-filter','title':c['title'],'entities':c['entities'],
+                        'conditions':[{'condition':'state','state_not':['unknown','unavailable']}],
+                        'show_empty':False,'card':{k:v for k,v in c.items() if k!='entities'}}
         periods = [('hour','Stündlich'),('day','Täglich'),('week','Wöchentlich'),('month','Monatlich'),('year','Jährlich')]
         navigation = []
         for period, label in periods:
@@ -228,6 +234,13 @@ def organise_dashboard(config, registry, owners=None):
         for container in [runtime]+runtime.get('sections',[]):
             if 'cards' in container:
                 container['cards']=[c for c in container.get('cards',[]) if c.get('title') not in ('Einschaltungen heute','Wärmepumpen – Betriebszustand','Betriebsstunden – Verlauf')]
+    personal=next((v for v in result['views'] if v.get('path')=='personal'),None)
+    if personal and energy:
+        copies=[c for c in cards(energy) if c.get('title')=='Momentanverbrauch']
+        for container in [personal]+personal.get('sections',[]):
+            if 'cards' in container:container['cards']=[c for c in container['cards'] if c not in copies]
+        if not cards(personal) and not personal.get('badges'):
+            result['views'].remove(personal)
     order=['overview','energy','runtime','temperatures','pv-buffer','settings','alarms','personal','details']
     result['views'].sort(key=lambda v:order.index(v.get('path')) if v.get('path') in order else len(order))
     return result
