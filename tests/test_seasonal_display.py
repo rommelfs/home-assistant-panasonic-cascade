@@ -64,6 +64,8 @@ class SeasonalDisplayTest(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(model.operating_mode({'tankModelId': 'x:hotWater'}))
         self.assertEqual(model.operating_mode({'dis': 'WP 1 | Energy | Cold Water | COP'}), 'cool')
         self.assertEqual(model.operating_mode({}, 'runningUnitsAmountHot'), 'heat')
+        self.assertEqual(model.operating_mode({}, 'waterTempSpOffsetCool'), 'cool')
+        self.assertEqual(model.operating_mode({'id': zinc.Ref('summary:unit:x:coolModeWaterTemperatureSensor', 'WP 1 – Kühlen – Regelungstyp (Code)')}), 'cool')
 
     def test_unrelated_custom_card_nested_entity_map_is_preserved(self):
         config = {"views": [{"cards": [{"type": "grid", "cards": [

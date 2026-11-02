@@ -2,6 +2,10 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.17.2](docs/releases/v0.17.2.md)
+
+- Include synthetic controller diagnostics and equipment-level Heat/Cool offset fields in seasonal display filtering.
+
 ## [0.17.1](docs/releases/v0.17.1.md)
 
 - Preserve unrelated custom cards with nested entity mappings during visibility filtering, avoiding an integration setup error.

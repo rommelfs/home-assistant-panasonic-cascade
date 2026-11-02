@@ -195,9 +195,9 @@ def operating_mode(row, field="curVal", rows=None):
     """Classify only mode-specific telemetry; shared plant/DHW points stay visible."""
     if is_dhw(row, field, rows):
         return None
-    if field.endswith("Cold"):
+    if field.endswith(("Cold", "Cool")):
         return "cool"
-    if field.endswith("Hot"):
+    if field.endswith(("Hot", "Heat")):
         return "heat"
     seen = set()
     while row:
@@ -209,7 +209,7 @@ def operating_mode(row, field="curVal", rows=None):
                 return "cool"
             if any(token in tokens for token in ("heat", "hot")):
                 return "heat"
-        label = str(row.get("dis", "")).casefold()
+        label = name(row).casefold()
         if any(word in label for word in ("kühlen", "cold water")):
             return "cool"
         if any(word in label for word in ("heizen", "hot water")):
