@@ -91,6 +91,17 @@ async def main():
   assert writes==[7,2,4,2,5],writes
   assert manager.lease['temperature_unmonitored_test'] is False
   assert manager.readings()['available']==2993
+  # Confirm real-HA status and no hardware toggle on small/transient import.
+  hass.states.async_set('sensor.test_export','65',{'unit_of_measurement':'W'})
+  await hass.async_block_till_done()
+  assert manager.lease and writes==[7,2,4,2,5]
+  hass.states.async_set('sensor.test_export','405',{'unit_of_measurement':'W'})
+  await hass.async_block_till_done()
+  assert manager.grid_import_since is not None
+  assert any(s.attributes.get('grid_import_confirmation_remaining_s',0)>0 for s in hass.states.async_all('sensor') if 'pv_pufferladung' in s.entity_id)
+  manager.grid_import_since=manager.clock()-61
+  await manager.async_tick()
+  assert manager.lease is None and writes==[7,2,4,2,5,2]
   await hass.services.async_call('panasonic_cascade','stop_buffer_charge',{'entry_id':entry.entry_id},blocking=True)
   assert writes==[7,2,4,2,5,2],writes
   # Metering continues without PV-charge permission, including at night.

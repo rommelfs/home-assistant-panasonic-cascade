@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.14.1](docs/releases/v0.14.1.md)
+
+- Avoid repeated PV-charge interruptions on small grid-meter fluctuations: default tolerance 100 W, with 60-second confirmation up to a hard 500 W limit during existing automatic priority charges.
+- Keep starts/manual tests strict, retain immediate battery/temperature/freshness/reserve guards and prevent full-block renewal while import is pending.
+- Preserve existing custom tolerances; expose confirmation diagnostics and configuration.
+
 ## [0.14.0](docs/releases/v0.14.0.md)
 
 - Add explicitly estimated PV/grid/battery attribution for aggregate heat-pump electrical power, independent of PV-charge permission.

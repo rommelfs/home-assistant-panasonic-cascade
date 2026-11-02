@@ -75,7 +75,7 @@
       },
       "pv_charge": {
         "title": "Temporäre PV-Pufferladung",
-        "description": "Ausgeschaltet bis zur bewussten Freigabe. Nur 0–10 °C Versatz; die Abschaltgrenze bis 75 °C erzeugt keinen absoluten Puffersollwert. Alle Leistungsquellen benötigen W/kW und regelmäßige frische Werte; Temperatur in °C. Normale Ladung benötigt eine gültige Puffer-Isttemperatur; nur der ausdrücklich gewählte Ladetest lässt sie aus. Ladetest ohne Fühler: echte WP-Änderung ohne Temperaturabschaltung. Nur beaufsichtigt manuell starten; niemals für den Dauerbetrieb. Testdauer maximal 5 Minuten, Versatz höchstens 2 °C zusätzlich. Automatischer Start muss ausgeschaltet sein. Der bisherige Versatz wird anschließend zurückgestellt, sobald der Regler erreichbar ist. Bei WP-Vorrang zählt Einspeisung plus Batterieladung abzüglich Batteriereserve. Der Versatz ist eine Freigabe, keine Leistungsregelung: Eine Mindest-Batterieladung kann nicht erzwungen werden. Unterschreitet die verbleibende Reserve die Stoppschwelle oder tritt Netzbezug oberhalb der Messtoleranz auf, wird zurückgestellt. Automatik verlängert bei passenden Messwerten vor Ablauf ohne Unterbrechung. Die Mindesthaltezeit betrifft die Ladeanforderung, nicht eine garantierte Verdichterlaufzeit. Netzbezug, Batterieentladung, verbrauchte Batteriereserve, Temperaturgrenze und ungültige Messwerte beenden die Anhebung weiterhin sofort. Manuelle Ladungen und Ladetests behalten ihr festes Zeitlimit.",
+        "description": "Ausgeschaltet bis zur bewussten Freigabe. Nur 0–10 °C Versatz; die Abschaltgrenze bis 75 °C erzeugt keinen absoluten Puffersollwert. Alle Leistungsquellen benötigen W/kW und regelmäßige frische Werte; Temperatur in °C. Normale Ladung benötigt eine gültige Puffer-Isttemperatur; nur der ausdrücklich gewählte Ladetest lässt sie aus. Ladetest ohne Fühler: echte WP-Änderung ohne Temperaturabschaltung. Nur beaufsichtigt manuell starten; niemals für den Dauerbetrieb. Testdauer maximal 5 Minuten, Versatz höchstens 2 °C zusätzlich. Automatischer Start muss ausgeschaltet sein. Der bisherige Versatz wird anschließend zurückgestellt, sobald der Regler erreichbar ist. Bei WP-Vorrang zählt Einspeisung plus Batterieladung abzüglich Batteriereserve. Der Versatz ist eine Freigabe, keine Leistungsregelung: Eine Mindest-Batterieladung kann nicht erzwungen werden. Die verbleibende Reserve wird weiterhin geprüft. Automatik verlängert bei passenden Messwerten vor Ablauf ohne Unterbrechung. Die Mindesthaltezeit betrifft die Ladeanforderung, nicht eine garantierte Verdichterlaufzeit. Starker Netzbezug, Batterieentladung, verbrauchte Batteriereserve, Temperaturgrenze und ungültige Messwerte beenden die Anhebung weiterhin sofort. Manuelle Ladungen und Ladetests behalten ihr festes Zeitlimit. Bei bereits laufender automatischer Ladung mit WP-Vorrang werden kleine Netzspitzen toleriert (Standard 100 W); darüber wird Netzbezug bis höchstens 500 W für 60 Sekunden bestätigt. Über der harten Grenze sofortiger Abbruch. Kurzzeitiger Netzbezug wird bewusst zugelassen. Während der Bestätigung keine neue 30-Minuten-Verlängerung. Starts, manuelle Ladung und Ladetests erhalten keine Bestätigungsfrist.",
         "data": {
           "pv_charge_enabled": "Temporäre PV-Pufferladung freigeben",
           "pv_charge_auto": "Bei stabilem PV-Überschuss automatisch starten",
@@ -96,10 +96,12 @@
           "pv_charge_test_without_temperature": "Ausdrücklicher Ladetest OHNE Pufferfühler (manuell, max. 5 min, zusätzlicher Versatz bis 2 °C)",
           "pv_charge_heat_pump_priority": "WP-Vorrang: laufende Batterieladung anteilig für die WP nutzen",
           "pv_charge_battery_reserve_w": "Für Batterieladung verbleibende PV-Leistung",
-          "pv_charge_grid_tolerance_w": "Messtoleranz für Netzbezug bei WP-Vorrang",
+          "pv_charge_grid_tolerance_w": "Tolerierter kleiner Netzbezug bei WP-Vorrang",
           "pv_charge_min_hold_min": "Mindesthaltezeit der automatischen Ladeanforderung",
           "pv_charge_stop_delay_s": "Verzögerung bei geringer Überschussreserve",
-          "pv_charge_restart_delay_min": "Sperrzeit vor erneutem automatischen Start"
+          "pv_charge_restart_delay_min": "Sperrzeit vor erneutem automatischen Start",
+          "pv_charge_grid_confirm_s": "Netzbezug bestätigen für",
+          "pv_charge_grid_hard_limit_w": "Netzbezug sofort abbrechen über"
         }
       },
       "energy_sources": {
@@ -121,7 +123,8 @@
       "pv_charge_missing_sources": "Alle drei Leistungsquellen auswählen; für normale Ladung zusätzlich den Pufferfühler.",
       "pv_charge_thresholds": "Die Startschwelle muss höher als die Stoppschwelle sein.",
       "pv_charge_test_manual_only": "Ladetest ohne Pufferfühler erlaubt keinen automatischen Start.",
-      "energy_sources_missing": "Alle drei Leistungsquellen auswählen."
+      "energy_sources_missing": "Alle drei Leistungsquellen auswählen.",
+      "pv_charge_grid_limits": "Die Sofort-Abbruchgrenze muss mindestens der Messtoleranz entsprechen."
     }
   }
 }

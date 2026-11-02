@@ -358,14 +358,14 @@ class ChargeTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_priority_keeps_import_discharge_freshness_and_pv_guards(self):
         self.options['pv_charge_heat_pump_priority']=True
-        for key,bad in [('export','-51'),('battery','101'),('pv','0'),('battery','unknown')]:
+        for key,bad in [('export','-101'),('battery','101'),('pv','0'),('battery','unknown')]:
             self.refresh();self.states['sensor.'+key].state=bad
             with self.assertRaises(HomeAssistantError):await self.begin()
         self.refresh();self.t+=61
         with self.assertRaises(HomeAssistantError):await self.begin()
         self.assertEqual(self.writes,[])
         self.refresh();self.states['sensor.battery'].state='-4000'
-        await self.begin();self.states['sensor.export'].state='-51'
+        await self.begin();self.states['sensor.export'].state='-101'
         await self.m.async_tick();self.assertEqual(self.writes,[7,2])
 
     async def test_priority_cannot_claim_more_than_measured_pv_or_count_discharge(self):
@@ -570,7 +570,7 @@ class ContinuousAutomaticChargeTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.writes, [5, 2])
 
     async def test_all_hard_guards_override_minimum_hold_and_renewal(self):
-        for key, raw in [('export', '-51'), ('battery', '101'), ('pv', '0'),
+        for key, raw in [('export', '-501'), ('battery', '101'), ('pv', '0'),
                          ('temperature', '75'), ('temperature', 'unknown'), ('export', '900')]:
             self.advance(720)
             await self.start_auto()
@@ -673,3 +673,153 @@ class ContinuousAutomaticChargeTest(unittest.IsolatedAsyncioTestCase):
         await self.start_auto()
         self.assertEqual(self.m.lease['expires'] - self.t, 30 * 60)
         self.assertEqual(self.m.lease['minimum_until'] - self.t, 30 * 60)
+
+
+class GridImportConfirmationTest(unittest.IsolatedAsyncioTestCase):
+    setUp = ChargeTest.setUp
+    refresh = ChargeTest.refresh
+    advance = ChargeTest.advance
+    start_auto = ContinuousAutomaticChargeTest.start_auto
+
+    def importing(self, watts):
+        self.states['sensor.export'].state = str(-watts)
+        self.states['sensor.battery'].state = '-4000'
+
+    async def test_replay_observed_53_to_67w_spikes_never_restores_offset(self):
+        await self.start_auto()
+        for watts in [65,62,64,67,53,57,61,60]:
+            self.advance(30)
+            self.importing(watts)
+            await self.m.async_tick()
+            self.assertIsNone(self.m.grid_import_since)
+            self.assertEqual(self.m.lease['phase'],'charging')
+        self.assertEqual(self.writes,[5])
+
+    async def test_short_405w_spike_recovers_without_stop_or_counter_accumulation(self):
+        await self.start_auto()
+        for _ in range(2):
+            self.importing(405)
+            await self.m.async_tick()
+            self.advance(59)
+            self.importing(405)
+            await self.m.async_tick()
+            self.assertEqual(self.writes,[5])
+            self.importing(0)
+            await self.m.async_tick()
+            self.assertIsNone(self.m.grid_import_since)
+        from custom_components.panasonic_cascade.charge_entities import BufferChargeSensor
+        self.assertEqual(BufferChargeSensor(self.c).extra_state_attributes['grid_import_confirmation_remaining_s'],0)
+
+    async def test_sustained_import_stops_at_60_seconds_and_enforces_cooldown(self):
+        await self.start_auto()
+        self.importing(150)
+        await self.m.async_tick()
+        self.advance(59)
+        self.importing(150)
+        await self.m.async_tick()
+        self.assertEqual(self.writes,[5])
+        self.advance(1)
+        self.importing(150)
+        await self.m.async_tick()
+        self.assertEqual(self.writes,[5,2])
+        self.assertIsNone(self.m.lease)
+        self.assertEqual(self.m.reason,'Sustained grid import confirmed')
+        self.assertEqual(self.m.restart_not_before,self.t+600)
+
+    async def test_more_than_500w_stops_immediately(self):
+        await self.start_auto()
+        self.importing(501)
+        await self.m.async_tick()
+        self.assertEqual(self.writes,[5,2])
+        self.assertIsNone(self.m.lease)
+
+    async def test_exact_100w_is_tolerated_500w_only_receives_confirmation(self):
+        await self.start_auto()
+        self.importing(100)
+        await self.m.async_tick()
+        self.assertIsNone(self.m.grid_import_since)
+        self.importing(500)
+        await self.m.async_tick()
+        self.assertIsNotNone(self.m.grid_import_since)
+        self.assertEqual(self.writes,[5])
+
+    async def test_confirmation_never_permits_a_new_start_or_manual_test(self):
+        self.options.update(pv_charge_auto=True,pv_charge_heat_pump_priority=True)
+        self.m.stable_since=self.t-120
+        self.importing(101)
+        with self.assertRaises(HomeAssistantError):await self.m._start(automatic=True)
+        self.assertEqual(self.writes,[])
+        self.importing(0)
+        await self.m.async_start(7,10)  # Explicit manual action, despite auto option.
+        self.importing(101)
+        await self.m.async_tick()
+        self.assertEqual(self.writes,[7,2])
+        self.options['pv_charge_test_without_temperature']=True
+        self.options['pv_charge_auto']=False
+        self.importing(101)
+        with self.assertRaises(HomeAssistantError):await self.m.async_start()
+
+    async def test_other_guards_override_confirmation_and_hold(self):
+        for key,raw in [('temperature','75'),('temperature','unknown'),('battery','101'),('pv','0'),('battery','-1200')]:
+            self.advance(720)
+            await self.start_auto()
+            self.importing(405)
+            await self.m.async_tick()
+            self.states['sensor.'+key].state=raw
+            await self.m.async_tick()
+            self.assertIsNone(self.m.lease,(key,raw))
+        self.assertEqual(self.writes,[5,2]*5)
+
+    async def test_stale_feedback_overrides_pending_confirmation(self):
+        await self.start_auto()
+        self.importing(405)
+        await self.m.async_tick()
+        self.states['sensor.temperature'].last_reported=datetime.fromtimestamp(self.t-61,UTC)
+        await self.m.async_tick()
+        self.assertEqual(self.writes,[5,2])
+
+    async def test_pending_confirmation_never_renews_a_30_minute_block(self):
+        await self.start_auto()
+        original=self.m.lease['expires']
+        self.advance(25*60)
+        self.importing(405)
+        await self.m.async_tick()
+        self.assertEqual(self.m.lease['expires'],original)
+        self.assertEqual(self.m.lease['extensions'],0)
+        self.importing(0)
+        await self.m.async_tick()
+        self.assertEqual(self.m.lease['expires'],original+1800)
+        self.assertEqual(self.writes,[5])
+
+    async def test_at_block_boundary_only_remaining_confirmation_is_granted(self):
+        await self.start_auto()
+        self.advance(30*60)
+        self.importing(405)
+        await self.m._deadline(None)
+        self.assertEqual(self.m.lease['expires'],self.t+60)
+        self.assertEqual(self.m.lease['extensions'],0)
+        self.advance(60)
+        self.importing(405)
+        await self.m._deadline(None)
+        self.assertEqual(self.writes,[5,2])
+
+    async def test_reload_restores_offset_without_resuming_grace(self):
+        await self.start_auto()
+        self.importing(405)
+        await self.m.async_tick()
+        new=charge.BufferCharge(self.c,self.store,clock=lambda:self.t)
+        await new.async_initialize()
+        self.assertIsNone(new.grid_import_since)
+        self.assertIsNone(new.lease)
+        self.assertEqual(self.writes,[5,2])
+
+    async def test_invalid_confirmation_limits_rejected_before_write(self):
+        self.options['pv_charge_heat_pump_priority']=True
+        for key,raw in [('pv_charge_grid_confirm_s',0),('pv_charge_grid_confirm_s',121),
+                        ('pv_charge_grid_hard_limit_w',501),('pv_charge_grid_hard_limit_w',99)]:
+            old=self.options[key]
+            self.options[key]=raw
+            self.m.stable_since=self.t-120
+            with self.assertRaises(HomeAssistantError):await self.m._start(automatic=True)
+            self.options[key]=old
+        self.assertEqual(self.writes,[])

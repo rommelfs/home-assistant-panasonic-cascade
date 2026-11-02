@@ -253,7 +253,8 @@ def build_dashboard(hass, entry_id=None):
                                           ('buffer_target','Puffer Soll','°C'), ('buffer_temperature','Puffer Ist','°C'),
                                           ('temperature_limit','Abschaltgrenze','°C'), ('remaining_minutes','Aktueller Ladeblock','min'),
                                           ('minimum_hold_remaining_minutes','Mindesthaltezeit verbleibend','min'),
-                                          ('restart_cooldown_minutes','Wiederanlaufsperre','min')]:
+                                          ('restart_cooldown_minutes','Wiederanlaufsperre','min'),
+                                          ('grid_import_confirmation_remaining_s','Netzspitze bestätigen','s')]:
                 content += label + ": {{ state_attr('" + entity_id + "','" + attribute + "') if state_attr('" + entity_id + "','" + attribute + "') is not none else '—' }} " + unit + "  \n"
             content += "\nDie Abschaltgrenze bis 75 °C ist kein absoluter Puffersollwert. Der bestätigte Versatz beträgt höchstens 10 °C."
             settings['cards'].insert(1, {'type':'markdown','title':'PV-Ladung · Rückstellung und Messwerte','content':content})

@@ -22,7 +22,8 @@ DEFAULTS = {
     'pv_charge_enabled': False, 'pv_charge_auto': False, 'pv_charge_confirmed': False,
     'pv_charge_test_without_temperature': False,
     'pv_charge_heat_pump_priority': False, 'pv_charge_battery_reserve_w': 1000,
-    'pv_charge_grid_tolerance_w': 50,
+    'pv_charge_grid_tolerance_w': 100,
+    'pv_charge_grid_confirm_s': 60, 'pv_charge_grid_hard_limit_w': 500,
     'pv_charge_export_positive': True, 'pv_charge_discharge_positive': True,
     'pv_charge_start_w': 1500, 'pv_charge_stop_w': 500, 'pv_charge_dwell_s': 120,
     'pv_charge_offset': 5, 'pv_charge_duration_min': 30, 'pv_charge_max_c': 75,
@@ -42,7 +43,7 @@ def finite(raw):
     return result
 
 
-def measurements(hass, options, now, *, unmonitored_test=False, temperature_sample=None):
+def measurements(hass, options, now, *, unmonitored_test=False, temperature_sample=None, allow_grid_grace=False):
     """Normalize explicit signed sources; unknown/stale data never become zero."""
     result = {}
     for key in SOURCE_KEYS:
@@ -77,11 +78,16 @@ def measurements(hass, options, now, *, unmonitored_test=False, temperature_samp
     if result['battery'] > 100:
         raise ValueError('Battery is discharging')
     priority = options.get('pv_charge_heat_pump_priority', False)
-    tolerance = finite(options.get('pv_charge_grid_tolerance_w', 50)) if priority else 0
+    tolerance = finite(options.get('pv_charge_grid_tolerance_w', 100)) if priority else 0
     if not 0 <= tolerance <= 100:
         raise ValueError('Invalid grid measurement tolerance')
-    if result['export'] < -tolerance:
-        raise ValueError('Grid import')
+    hard_limit = finite(options.get('pv_charge_grid_hard_limit_w', 500)) if priority else 0
+    confirm = finite(options.get('pv_charge_grid_confirm_s', 60)) if priority else 60
+    if not tolerance <= hard_limit <= 500 or not 15 <= confirm <= 120:
+        raise ValueError('Invalid grid import confirmation limits')
+    limit = hard_limit if priority and allow_grid_grace else tolerance
+    if result['export'] < -limit:
+        raise ValueError('Grid import exceeds hard limit' if priority and allow_grid_grace else 'Grid import')
     # Export and battery charging are alternative sinks for current PV surplus.
     # Signed subtraction also deducts a small battery discharge rather than
     # incorrectly adding it to the solar budget. Never count more than measured PV.
@@ -109,6 +115,7 @@ class BufferCharge:
         self.last_restore_attempt = -math.inf
         self.last_verify = -math.inf
         self.low_surplus_since = None
+        self.grid_import_since = None
         self.restart_not_before = 0
         self.unsub, self.tasks = [], set()
         self.deadline_cancel = None
@@ -171,11 +178,19 @@ class BufferCharge:
     def unmonitored_test(self):
         return self.options['pv_charge_test_without_temperature'] is True
 
+    @property
+    def grid_grace_active(self):
+        lease = self.lease or {}
+        return bool(lease.get('automatic') and lease.get('phase') == 'charging'
+                    and not lease.get('temperature_unmonitored_test')
+                    and self.options['pv_charge_auto'] and self.options['pv_charge_heat_pump_priority'])
+
     def readings(self):
         # A test option may not weaken an existing normal charge's guards.
         testing = self.unmonitored_test and (self.lease is None or self.lease.get('temperature_unmonitored_test') is True)
         sample = None if testing else self.temperature_reports.sample(self.options.get('pv_charge_temperature_sensor'))
-        return measurements(self.hass, self.options, self.clock(), unmonitored_test=testing, temperature_sample=sample)
+        return measurements(self.hass, self.options, self.clock(), unmonitored_test=testing, temperature_sample=sample,
+                            allow_grid_grace=self.grid_grace_active)
 
     def point(self):
         points = [ident for ident, row in (self.c.data or {}).items() if is_buffer_offset(row)]
@@ -242,6 +257,7 @@ class BufferCharge:
         if automatic:
             duration = max(duration, finite(o['pv_charge_min_hold_min']))
         self.low_surplus_since = None
+        self.grid_import_since = None
         self.lease = {'automatic': automatic, 'started': self.clock(),
                       'block_seconds': duration * 60,
                       'minimum_until': self.clock() + finite(o['pv_charge_min_hold_min']) * 60 if automatic else self.clock(),
@@ -313,6 +329,7 @@ class BufferCharge:
         await self.store.async_save({'lease': None, 'reason': reason, 'restart_not_before': restart_not_before})
         self.restart_not_before = restart_not_before
         self.low_surplus_since = None
+        self.grid_import_since = None
         self.lease = None
         self.reason, self.status, self.stable_since = reason, 'idle', None
         self.changed()
@@ -395,6 +412,14 @@ class BufferCharge:
                     else:
                         data = self.readings()  # Hard guards always win, including during a hold.
                         automatic = self.lease.get('automatic') and self.options['pv_charge_auto']
+                        grid_pending = self.grid_grace_active and data['export'] < -finite(self.options['pv_charge_grid_tolerance_w'])
+                        if grid_pending:
+                            if self.grid_import_since is None:
+                                self.grid_import_since = self.clock()
+                            if self.clock() - self.grid_import_since >= self.options['pv_charge_grid_confirm_s']:
+                                reason = 'Sustained grid import confirmed'
+                        else:
+                            self.grid_import_since = None
                         low = data['available'] < self.options['pv_charge_stop_w']
                         if low:
                             if self.low_surplus_since is None:
@@ -416,16 +441,23 @@ class BufferCharge:
                         self.last_verify = self.clock()
                     if reason is None:
                         remaining = self.lease['expires'] - self.clock()
-                        if automatic and not low and remaining <= min(300, self.lease['block_seconds'] / 2):
+                        if automatic and not low and not grid_pending and remaining <= min(300, self.lease['block_seconds'] / 2):
                             await self._extend()
                             self.reason = 'Automatic charge extended without interruption'
                         elif remaining <= 0:
-                            grace_until = (self.low_surplus_since or self.clock()) + self.options['pv_charge_stop_delay_s']
-                            if automatic and low and self.clock() < grace_until:
+                            deadlines = []
+                            if low:
+                                deadlines.append(self.low_surplus_since + self.options['pv_charge_stop_delay_s'])
+                            if grid_pending:
+                                deadlines.append(self.grid_import_since + self.options['pv_charge_grid_confirm_s'])
+                            grace_until = min(deadlines) if deadlines else self.clock()
+                            if automatic and deadlines and self.clock() < grace_until:
                                 await self._extend(until=grace_until)
-                                self.reason = 'Brief low surplus margin at block boundary; evaluating recovery'
+                                self.reason = 'Brief power fluctuation at block boundary; evaluating recovery'
                             else:
                                 reason = 'Charge duration expired'
+                        elif grid_pending:
+                            self.reason = 'Grid import under confirmation; holding charge request'
                         elif low:
                             self.reason = 'Holding charge request through a low surplus margin; reserve still available'
                         else:

@@ -200,6 +200,8 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             elif data.get('pv_charge_enabled') and not all(data.get(key) for key in sources
                     if key != 'pv_charge_temperature_sensor' or not data.get('pv_charge_test_without_temperature')):
                 errors['base'] = 'pv_charge_missing_sources'
+            elif data.get('pv_charge_grid_hard_limit_w', 500) < data.get('pv_charge_grid_tolerance_w',100):
+                errors['base'] = 'pv_charge_grid_limits'
             elif data['pv_charge_stop_w'] >= data['pv_charge_start_w']:
                 errors['base'] = 'pv_charge_thresholds'
             else:
@@ -219,6 +221,8 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
         for key, low, high, step, unit in (
             ('pv_charge_battery_reserve_w', 100, 15000, 100, 'W'),
             ('pv_charge_grid_tolerance_w', 0, 100, 5, 'W'),
+            ('pv_charge_grid_confirm_s', 15, 120, 15, 's'),
+            ('pv_charge_grid_hard_limit_w', 100, 500, 50, 'W'),
             ('pv_charge_start_w', 100, 30000, 100, 'W'), ('pv_charge_stop_w', 0, 29900, 100, 'W'),
             ('pv_charge_dwell_s', 15, 600, 15, 's'), ('pv_charge_offset', 1, 10, 1, '°C'),
             ('pv_charge_min_hold_min', 10, 120, 5, 'min'),
