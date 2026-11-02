@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.17.0](docs/releases/v0.17.0.md)
+
+- Group heating-curve fields by water/outdoor temperature; plot current outdoor temperature with x/y guides and persistent readings.
+- Add reversible heating/cooling display options while retaining measurements, history and automation IDs.
+- Refresh generated cards with installation-specific outdoor sensors and use a new versioned frontend resource.
+
 ## [0.16.1](docs/releases/v0.16.1.md)
 
 - Keep source-balance Markdown rows contiguous after template rendering and hide unavailable current-attribution rows until measurements recover.
