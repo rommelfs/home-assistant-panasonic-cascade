@@ -248,6 +248,8 @@ def build_dashboard(hass, entry_id=None):
         for entity_id in status:
             content = "{{ state_attr('" + entity_id + "','reason') or 'PV-Pufferladung in den Integrationsoptionen konfigurieren.' }}\n\n"
             for attribute, label, unit in [('available_surplus_w','Für WP verfügbar','W'),
+                                          ('adaptive_budget_w','PV-Budget inkl. laufender WP','W'),
+                                          ('adaptive_target','PV-Ladeziel','°C'), ('adaptive_next_target','Geprüfte nächste Stufe','°C'),
                                           ('battery_reserve_w','Batteriereserve','W'), ('baseline_offset','Vorheriger Versatz','°C'), ('requested_offset','Temporärer Versatz','°C'),
                                           ('effective_offset','Wirksamer Versatz','°C'), ('zone_target','Zone Soll','°C'),
                                           ('buffer_target','Puffer Soll','°C'), ('buffer_temperature','Puffer Ist','°C'),
@@ -256,7 +258,7 @@ def build_dashboard(hass, entry_id=None):
                                           ('restart_cooldown_minutes','Wiederanlaufsperre','min'),
                                           ('grid_import_confirmation_remaining_s','Netzspitze bestätigen','s')]:
                 content += label + ": {{ state_attr('" + entity_id + "','" + attribute + "') if state_attr('" + entity_id + "','" + attribute + "') is not none else '—' }} " + unit + "  \n"
-            content += "\nDie Abschaltgrenze bis 75 °C ist kein absoluter Puffersollwert. Der bestätigte Versatz beträgt höchstens 10 °C."
+            content += "\nAdaptive Automatik: 45–65 °C in 5-Grad-Stufen, abhängig vom PV-Budget. Maximal 31 Grad Versatz, zuerst an der Referenzanlage getestet. Höhere Stufe nach 5 Minuten stabilem Budget, Stufenwechsel frühestens nach 10 Minuten. Keine garantierte COP-Optimierung. Sonst bleibt der feste Versatz auf 10 Grad begrenzt."
             settings['cards'].insert(1, {'type':'markdown','title':'PV-Ladung · Rückstellung und Messwerte','content':content})
     if source_rows:
         energy_view = next((v for v in config['views'] if v['path']=='energy'),None)

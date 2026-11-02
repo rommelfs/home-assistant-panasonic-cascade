@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.15.0](docs/releases/v0.15.0.md)
+
+- Add explicitly enabled adaptive automatic PV targets from 45 to 65 °C, bounded to the reference-tested 31-degree buffer offset.
+- Prefer lower temperatures with staged PV budgets, hysteresis and timed changes; retain battery/grid/temperature guards and durable pending-write restoration.
+- Expose adaptive diagnostics and verify protocol plus real HA reload/restoration.
+
 ## [0.14.1](docs/releases/v0.14.1.md)
 
 - Avoid repeated PV-charge interruptions on small grid-meter fluctuations: default tolerance 100 W, with 60-second confirmation up to a hard 500 W limit during existing automatic priority charges.

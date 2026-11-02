@@ -18,9 +18,9 @@ The hold starts when the integration raises the request; it is **not a measured 
 
 ## Supported temperature control
 
-The verified cascade buffer point is `_equip:buffer_point:tBufferTank`. Captured metadata advertises **0–10 °C**. This is an offset relative to the zone demand. A 31 °C zone demand and a 10 °C offset cannot command a 75 °C buffer target. The integration does not edit the heating curve, zone setpoint, SG Ready, or similarly named heat-pump feedback points to work around that limit.
+The verified cascade buffer point is `_equip:buffer_point:tBufferTank`. Captured metadata advertises **0–10 °C**. This is an offset relative to the zone demand. A 31 °C zone demand and a 10 °C offset cannot command a 75 °C buffer target. The integration does not edit the heating curve, zone setpoint, SG Ready, or similarly named heat-pump feedback points. Fixed/manual mode respects the advertised range; opt-in adaptive automatic mode uses the separately bounded extension described below.
 
-The configurable **buffer temperature stop limit** is capped at **75 °C**. It is an early-stop guard, not an absolute target and not evidence that an installation can operate at that temperature. Use a lower limit wherever the heat pump, buffer, heating circuit or mixing controls require one. A separate writable absolute buffer target has not been verified. In particular, `−78 °C` is invalid buffer feedback and blocks charging.
+The configurable **buffer temperature stop limit** is capped at **75 °C** in fixed mode and **65 °C** in adaptive mode. It is an early-stop guard, not an absolute target and not evidence that an installation can operate at that temperature. Use a lower limit wherever the heat pump, buffer, heating circuit or mixing controls require one. A separate writable absolute buffer target has not been verified. In particular, `−78 °C` is invalid buffer feedback and blocks charging.
 
 ## Configure
 
@@ -28,7 +28,7 @@ The configurable **buffer temperature stop limit** is capped at **75 °C**. It i
 2. Open **Settings → Devices & services → Panasonic Cascade / Smart Edge → Configure**. Enable experimental controls, select **Configure temporary PV buffer charging**, and submit.
 3. Select four actual measurement sources: signed grid export/import, signed battery discharge/charge, PV production, and the buffer temperature at the hottest monitored point. Power sources must provide W or kW; the temperature source must provide °C.
 4. Set the sign conventions explicitly. Positive grid values can mean either export or import depending on the source. Similarly, configure whether positive battery values mean discharge. Do not infer PV surplus from an unverified power sensor or from battery-supported inverter output.
-5. Set start/stop export thresholds, stable-export time, maximum measurement age, temporary offset, manual duration/automatic charge-block length, and temperature stop limit. Defaults: start 1500 W, stop below 500 W, stable export 120 s, age 60 s, offset 5 °C, duration 30 minutes, temperature stop limit 75 °C. A raised offset must be greater than the current offset and remain within the live controller bounds.
+5. Set start/stop export thresholds, stable-export time, maximum measurement age, temporary offset, manual duration/automatic charge-block length, and temperature stop limit. Defaults: start 1500 W, stop below 500 W, stable export 120 s, age 60 s, offset 5 °C, duration 30 minutes, temperature stop limit 75 °C. In fixed/manual mode a raised offset must be greater than the current offset and remain within the live controller bounds. Adaptive mode requires an explicit additional opt-in and a 40–65 °C stop ceiling.
 6. Confirm that the source signs, hottest-point temperature feedback, permitted temperature and mixing circuit have been checked. Enable temporary charging only after this verification. **Automatic start is a separate option and defaults to off.**
 
 Sources must actually update often enough. Increasing the maximum age does not make a slow integration fast feedback. Missing, stale, non-finite or incorrectly dimensioned measurements block charging; they are never replaced with zero. No PV production, disallowed grid import (see below), battery discharge above 100 W, leaving the cascade heating mode, or reaching the temperature limit ends a charge. Manual charging also ends immediately when surplus falls below its stop threshold; automatic charging uses the hold/debounce policy above. The conditions are checked on source state changes and at least every 15 seconds; a dedicated deadline callback also checks whether restoration or an automatic renewal is required at expiry. Physical device/network delays remain possible.
@@ -126,3 +126,28 @@ Protocol, HA entity/configuration/service tests and fault-injection tests simula
 ### ESPHome temperature report freshness
 
 Since 0.12.1, matching real packets from the configured ESPHome temperature sensor count even when HA suppresses identical sensor states. The existing connection is observed without reading/replaying its cache or modifying the source entity. The first possible subscription snapshot is ignored. Silence, missing/invalid measurements and disconnection still block charging; no freshness limit is increased. Status attributes show the native packet count and report age. Other source platforms continue to use HA `last_reported`. Firmware that does not publish regular temperature samples still needs its own reporting configuration corrected.
+
+
+## Adaptive automatic PV targets (0.15.0)
+
+Enable **Use adaptive PV targets up to 65 °C** in the PV options, with automatic charging, verified source mappings and a real buffer probe. This setting is disabled by default. Manual actions and sensorless tests retain their original fixed-offset limits. Set a suitable temperature stop ceiling no higher than 65 °C; never treat the buffer vessel rating as the limit for the connected heating circuit.
+
+The controller advertises a 10-degree maximum offset. An authorized brief reference-installation probe nevertheless confirmed offsets up to 31 degrees, with a 34 °C zone demand and calculated buffer targets up to 65 °C. Adaptive mode deliberately exceeds that metadata, only for this isolated buffer point and the verified metadata profile. This is experimental and does not constitute manufacturer approval or a sustained high-temperature operating test.
+
+| Buffer target | Required PV budget after battery reserve, including existing WP consumption |
+| --- | --- |
+| 45 °C | 3,000 W |
+| 50 °C | 4,500 W |
+| 55 °C | 6,000 W |
+| 60 °C | 8,000 W |
+| 65 °C | 10,000 W |
+
+The configured start threshold and stable-start dwell still apply. Start at the **lowest** eligible stage. Raise at most one stage after five minutes above the next budget plus 500 W. Lower at most one stage after two minutes below the current budget minus 750 W. Allow at least ten minutes between temperature-stage changes. These thresholds favour lower temperatures; they do not measure or mathematically optimise COP. The original immediate grid/battery/reserve/temperature/freshness guards take priority over these stage timers.
+
+In priority mode, stage budget is `min(PV minus battery reserve, available surplus plus total WP electrical power)`. Existing WP draw is included so its own consumption does not masquerade as disappearing PV. Source accounting is unchanged. Missing, stale or invalid WP electrical feedback blocks adaptive charging rather than assuming zero.
+
+The offset equals selected target minus fresh zone demand, at most **31 degrees**. Consequently, 65 °C is available only where that demand makes it reachable within the tested envelope; lower zone demand can limit charging to a lower stage. Feedback must confirm both effective offset and actual calculated buffer target after every write. A zone-demand change is compensated without changing the selected PV temperature stage. Unexpected feedback, overshooting targets or leaving the verified envelope ends the boost.
+
+Original defaults and pending adjustments are saved before writes. Stops and restart/reload restore the original offset; ambiguous writes are not repeated and independent changes are preserved. The normal permanent-offset number remains limited to 10 degrees. This feature does not bypass the device's physical safety controls or alter zone demand, heating curves, SG Ready or mode selectors.
+
+Diagnostics include `adaptive_active`, `adaptive_target`, `adaptive_next_target` and `adaptive_budget_w`. Regenerate the dashboard only if you want these extra diagnostic rows; existing cards are retained. Existing charge history continues to record the request. A software temperature ceiling uses the selected sensor (for example buffer middle), normal sampling and device/network response time; it cannot guarantee an exact hottest-tank temperature or prevent every overshoot.

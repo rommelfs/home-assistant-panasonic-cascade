@@ -75,7 +75,7 @@
       },
       "pv_charge": {
         "title": "Temporary PV buffer charging",
-        "description": "Disabled until explicitly enabled. The supported offset is 0–10 °C; a stop limit up to 75 °C does not command that absolute target. Power sources require W/kW and regular fresh updates; temperature requires °C. Normal charging requires valid actual buffer feedback; only the explicitly selected hardware test omits it. Sensorless test: real heat-pump write without temperature cutoff. Start manually under supervision, never for unattended operation. Maximum 5 minutes and 2 °C additional offset. Automatic start must be off. The previous offset is restored afterwards when the controller is reachable. With heat-pump priority, available surplus is export plus battery charging minus the battery reserve. The offset enables heating but cannot regulate electrical draw or guarantee a minimum battery charging rate. The available surplus and battery reserve remain guarded. Automatic charging renews before expiry without interruption while measurements permit it. Minimum hold applies to the charge request, not guaranteed compressor runtime. High grid import, battery discharge, an exhausted battery reserve, temperature limits and invalid feedback still end the boost immediately. Manual charges and hardware tests retain a fixed deadline. During an existing automatic charge with heat-pump priority, tolerate small grid fluctuations (default 100 W); above this, confirm import up to 500 W for 60 seconds. Import above the hard limit stops immediately. Brief grid consumption is deliberately allowed. No full-block renewal during confirmation. Starts, manual charges and sensorless tests receive no confirmation grace.",
+        "description": "Disabled until explicitly enabled. Fixed offset: 0–10 degrees. Explicitly opt-in adaptive automatic charging selects 45–65 °C targets from the PV budget including existing WP power, after the battery reserve. Offsets up to 31 degrees exceed advertised metadata; verified with target feedback on the reference installation only, without manufacturer approval. Start at the lowest suitable stage; raise by 5 degrees at most every 10 minutes after 5 minutes of stable budget. Downward stages use 2-minute confirmation and hysteresis. Prefer lower temperatures; optimal COP is not guaranteed. Adaptive charging requires a temperature sensor and a stop limit no higher than 65 °C. Manual charging keeps the fixed offset. Power sources require W/kW and regular fresh updates; temperature requires °C. Normal charging requires valid actual buffer feedback; only the explicitly selected hardware test omits it. Sensorless test: real heat-pump write without temperature cutoff. Start manually under supervision, never for unattended operation. Maximum 5 minutes and 2 °C additional offset. Automatic start must be off. The previous offset is restored afterwards when the controller is reachable. With heat-pump priority, available surplus is export plus battery charging minus the battery reserve. The offset enables heating but cannot regulate electrical draw or guarantee a minimum battery charging rate. The available surplus and battery reserve remain guarded. Automatic charging renews before expiry without interruption while measurements permit it. Minimum hold applies to the charge request, not guaranteed compressor runtime. High grid import, battery discharge, an exhausted battery reserve, temperature limits and invalid feedback still end the boost immediately. Manual charges and hardware tests retain a fixed deadline. During an existing automatic charge with heat-pump priority, tolerate small grid fluctuations (default 100 W); above this, confirm import up to 500 W for 60 seconds. Import above the hard limit stops immediately. Brief grid consumption is deliberately allowed. No full-block renewal during confirmation. Starts, manual charges and sensorless tests receive no confirmation grace.",
         "data": {
           "pv_charge_enabled": "Enable temporary PV buffer charging",
           "pv_charge_auto": "Start automatically when PV export is stable",
@@ -101,7 +101,8 @@
           "pv_charge_stop_delay_s": "Delay while surplus margin is low",
           "pv_charge_restart_delay_min": "Cooldown before another automatic start",
           "pv_charge_grid_confirm_s": "Confirm sustained grid import for",
-          "pv_charge_grid_hard_limit_w": "Stop immediately above grid import"
+          "pv_charge_grid_hard_limit_w": "Stop immediately above grid import",
+          "pv_charge_adaptive": "Use adaptive PV targets up to 65 °C (experimental, up to 31-degree offset)"
         }
       },
       "energy_sources": {
@@ -124,7 +125,8 @@
       "pv_charge_thresholds": "The start threshold must exceed the stop threshold.",
       "pv_charge_test_manual_only": "Sensorless charge tests do not allow automatic start.",
       "energy_sources_missing": "Select all three power measurements.",
-      "pv_charge_grid_limits": "The immediate-stop threshold must be at least the measurement tolerance."
+      "pv_charge_grid_limits": "The immediate-stop threshold must be at least the measurement tolerance.",
+      "pv_charge_adaptive_limits": "Adaptive charging requires a temperature sensor and a stop limit of 40–65 °C."
     }
   }
 }

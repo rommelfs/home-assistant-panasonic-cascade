@@ -19,10 +19,15 @@ async def main():
  class Client:
   url='https://controller.invalid';project='demo'
   def __init__(self,*_):pass
-  async def snapshot(self,*_):return {'summary:consumedPower':{'curVal':Number(2,'kW'),'unit':'kW','curStatus':'ok'},'p:demo:r:offset':dict(row),'p:demo:r:mode':{'id':Ref('p:demo:r:mode'),'bufferModelId':'_equip:buffer_point:bufferMode','curStatus':'ok','curVal':'Heat'}}
-  async def read_point(self,ident,*_):return {'bufferModelId':'_equip:buffer_point:bufferMode','curStatus':'ok','curVal':'Heat'} if ident=='p:demo:r:mode' else dict(row)
+  async def snapshot(self,*_):
+   return {'summary:consumedPower':{'curVal':Number(2,'kW'),'unit':'kW','curStatus':'ok'},'p:demo:r:offset':dict(row),
+           'p:demo:r:mode':{'id':Ref('p:demo:r:mode'),'bufferModelId':'_equip:buffer_point:bufferMode','curStatus':'ok','curVal':'Heat'},
+           'p:demo:r:zone':{'id':Ref('p:demo:r:zone'),'bufferModelId':'_equip:buffer_point:zone1WaterTemperatureSetpoint','curStatus':'ok','curVal':Number(34,'°C')},
+           'p:demo:r:target':{'id':Ref('p:demo:r:target'),'bufferModelId':'_equip:buffer_point:bufferSetpoint','curStatus':'ok','curVal':Number(34+row['curVal'].value,'°C')}}
+  async def read_point(self,ident,*_):return (await self.snapshot())[ident]
   async def set_default(self,point,target):
    writes.append(target);row.update(curVal=Number(target,'°C'),writeDef=Number(target,'°C'))
+  async def set_pv_buffer_offset(self,point,target,*_):await self.set_default(point,target)
  opts={'enable_controls':True,'pv_charge_enabled':True,'pv_charge_confirmed':True,'pv_charge_auto':False}
  for key,n,u in [('export',2500,'W'),('battery',0,'W'),('pv',6000,'W'),('temperature',40,'°C')]:
   opts[f'pv_charge_{key}_sensor']='sensor.test_'+key
@@ -121,6 +126,29 @@ async def main():
   await hass.async_block_till_done()
   assert entry.runtime_data.energy_sources is None
   assert accounting.closed and not accounting.unsub
+  # Full adaptive lifecycle through the real HA entry and entities, fake hardware.
+  hass.states.async_set('sensor.test_pv','20000',{'unit_of_measurement':'W'})
+  hass.states.async_set('sensor.test_export','-13000',{'unit_of_measurement':'W'})
+  hass.states.async_set('sensor.test_battery','0',{'unit_of_measurement':'W'})
+  hass.states.async_set('sensor.test_temperature','40',{'unit_of_measurement':'°C'})
+  hass.config_entries.async_update_entry(entry,options={**dict(entry.options),
+    'pv_charge_enabled':True,'pv_charge_auto':True,'pv_charge_adaptive':True,'pv_charge_max_c':65})
+  await hass.async_block_till_done()
+  manager=entry.runtime_data.buffer_charge;manager.stable_since=manager.clock()-121
+  manager.restart_not_before=0  # Earlier grid-stop cooldown was tested above.
+  await manager.async_tick()
+  assert manager.lease and manager.lease['target']==45 and writes[-1]==11,(manager.reason,writes)
+  await hass.async_block_till_done()
+  assert any(s.attributes.get('adaptive_target')==45 for s in hass.states.async_all('sensor'))
+  for target in (50,55,60,65):
+   manager.stage_candidate=target;manager.stage_since=manager.clock()-301
+   manager.lease['stage_changed']=manager.clock()-601
+   await manager.async_tick()
+   assert manager.lease['target']==target
+  assert writes[-5:]==[11,16,21,26,31],writes
+  await hass.config_entries.async_reload(entry.entry_id);await hass.async_block_till_done()
+  assert writes[-1]==2 and entry.runtime_data.buffer_charge.lease is None
+  assert any(s.state=='off' for s in hass.states.async_all('binary_sensor') if 'pv_pufferladung' in s.entity_id)
   assert await hass.config_entries.async_unload(entry.entry_id)
   await hass.async_stop(force=True)
   print('SERVICE_START_RELOAD_RESTORE_AND_UNLOAD_OK',writes)

@@ -17,6 +17,8 @@ from .api import ApiError, AuthError
 from .model import bounds, is_buffer_offset, model_key, validate_buffer_offset
 from .zinc import value
 from .temperature_reports import TemperatureReports
+from .calculated import watts
+from .charge_policy import initial_target, next_target, STAGE_INTERVAL, UP_CONFIRM, DOWN_CONFIRM
 
 DEFAULTS = {
     'pv_charge_enabled': False, 'pv_charge_auto': False, 'pv_charge_confirmed': False,
@@ -30,6 +32,7 @@ DEFAULTS = {
     'pv_charge_max_age_s': 60,
     'pv_charge_min_hold_min': 30, 'pv_charge_stop_delay_s': 120,
     'pv_charge_restart_delay_min': 10,
+    'pv_charge_adaptive': False,
 }
 SOURCE_KEYS = ('export', 'battery', 'pv', 'temperature')
 
@@ -116,6 +119,8 @@ class BufferCharge:
         self.last_verify = -math.inf
         self.low_surplus_since = None
         self.grid_import_since = None
+        self.stage_candidate, self.stage_since = None, None
+        self.controller_at = self.clock()
         self.restart_not_before = 0
         self.unsub, self.tasks = [], set()
         self.deadline_cancel = None
@@ -152,8 +157,14 @@ class BufferCharge:
         self.unsub.append(async_track_time_interval(self.hass, self.request_tick, timedelta(seconds=15)))
         sources = [self.options.get(f'pv_charge_{key}_sensor') for key in SOURCE_KEYS]
         self.unsub.append(async_track_state_change_event(self.hass, [s for s in sources if s], self.request_tick))
-        self.unsub.append(self.c.async_add_listener(self.request_tick))
+        self.unsub.append(self.c.async_add_listener(self.controller_updated))
         await self.async_tick()
+
+    @callback
+    def controller_updated(self):
+        if self.c.last_update_success:
+            self.controller_at = self.clock()
+        self.request_tick()
 
     @callback
     def request_tick(self, _event=None):
@@ -189,7 +200,10 @@ class BufferCharge:
         # A test option may not weaken an existing normal charge's guards.
         testing = self.unmonitored_test and (self.lease is None or self.lease.get('temperature_unmonitored_test') is True)
         sample = None if testing else self.temperature_reports.sample(self.options.get('pv_charge_temperature_sensor'))
-        return measurements(self.hass, self.options, self.clock(), unmonitored_test=testing, temperature_sample=sample,
+        options = self.options
+        if (self.lease or {}).get('adaptive') or (not self.lease and options['pv_charge_adaptive'] and options['pv_charge_auto']):
+            options['pv_charge_max_c'] = min(65, finite(options['pv_charge_max_c']))
+        return measurements(self.hass, options, self.clock(), unmonitored_test=testing, temperature_sample=sample,
                             allow_grid_grace=self.grid_grace_active)
 
     def point(self):
@@ -209,6 +223,80 @@ class BufferCharge:
         row = await self.fresh(points[0])
         if row.get('curStatus') != 'ok' or value(row.get('curVal')) != 'Heat':
             raise ValueError('PV buffer charging requires the cascade heating mode')
+
+    def adaptive_budget(self, data):
+        power = watts((self.c.data or {}).get('summary:consumedPower'))
+        if not self.c.last_update_success or power is None or self.clock() - self.controller_at > self.options['pv_charge_max_age_s']:
+            raise ValueError('Adaptive charging requires fresh total WP electrical power')
+        # Never count battery/grid draw or more energy than the PV produces.
+        reserve = self.options['pv_charge_battery_reserve_w'] if self.options['pv_charge_heat_pump_priority'] else 0
+        return min(max(0, data['pv'] - reserve), data['available'] + power)
+
+    async def target_feedback(self):
+        result = {}
+        for key in ('zone1WaterTemperatureSetpoint', 'bufferSetpoint'):
+            points = [ident for ident, row in (self.c.data or {}).items()
+                      if row.get('bufferModelId') and model_key(row) == key]
+            if len(points) != 1:
+                raise ValueError('Exactly one cascade ' + key + ' feedback is required')
+            row = await self.fresh(points[0])
+            raw = row.get('curVal')
+            number = value(raw)
+            if row.get('curStatus') != 'ok' or getattr(raw, 'unit', None) != '°C' or type(number) not in (int, float) or not math.isfinite(number) or not 20 <= number <= 65:
+                raise ValueError('Invalid adaptive ' + key + ' feedback')
+            result[key] = number
+        return result
+
+    async def write_adaptive(self, row, offset, zone, target):
+        # Last source guard before every elevated write, including retargets.
+        self.readings()
+        await self.c.client.set_pv_buffer_offset(row, offset, zone, min(65, self.options['pv_charge_max_c']))
+        for attempt in range(4):
+            current = await self.fresh(self.lease['point'])
+            validate_buffer_offset(current)
+            feedback = await self.target_feedback()
+            self.readings()
+            if feedback['zone1WaterTemperatureSetpoint'] != zone:
+                raise ValueError('Zone target changed while applying PV target')
+            if value(current['writeDef']) == offset and value(current['curVal']) == offset and feedback['bufferSetpoint'] == target:
+                return current
+            if attempt < 3:
+                await asyncio.sleep(2)
+        raise ValueError('Adaptive buffer target was not confirmed')
+
+    async def adaptive_tick(self, data, *, allow_raise=True):
+        lease = self.lease
+        feedback = await self.target_feedback()
+        zone = feedback['zone1WaterTemperatureSetpoint']
+        budget = self.adaptive_budget(data)
+        target = lease['target']
+        desired = next_target(budget, target, zone, lease['baseline'], min(65, self.options['pv_charge_max_c']))
+        if not allow_raise and desired > target:
+            desired = target
+        now = self.clock()
+        if desired != self.stage_candidate:
+            self.stage_candidate, self.stage_since = desired, now
+        confirm = UP_CONFIRM if desired > target else DOWN_CONFIRM
+        change = desired != target and now - self.stage_since >= confirm and now - lease['stage_changed'] >= STAGE_INTERVAL
+        chosen = desired if change else target
+        offset = chosen - zone
+        if not change and offset == lease['applied']:
+            if feedback['bufferSetpoint'] != target:
+                raise ValueError('Adaptive target changed independently')
+            return
+        row = await self.fresh(lease['point'])
+        validate_buffer_offset(row)
+        if value(row['writeDef']) != lease['applied']:
+            raise ValueError('Adaptive offset changed independently')
+        lease.update(phase='adjusting', pending_offset=offset)
+        await self.save()  # Recovery accepts old or pending value after ambiguous writes.
+        await self.write_adaptive(row, offset, zone, chosen)
+        lease.update(phase='charging', applied=offset, target=chosen, zone=zone)
+        lease.pop('pending_offset', None)
+        if change:
+            lease['stage_changed'] = now
+            self.stage_candidate, self.stage_since = None, None
+        await self.save()
 
     async def async_start(self, offset=None, duration=None):
         async with self.lock:
@@ -242,12 +330,23 @@ class BufferCharge:
             row = await self.fresh(ident)
             validate_buffer_offset(row)
             baseline = value(row['writeDef'])
+            adaptive = automatic and o['pv_charge_adaptive'] and not testing
+            target, zone = None, None
+            if adaptive:
+                if not 40 <= finite(o['pv_charge_max_c']) <= 65:
+                    raise ValueError('Adaptive charging requires a stop limit of 40–65 °C')
+                feedback = await self.target_feedback()
+                zone = feedback['zone1WaterTemperatureSetpoint']
+                if feedback['bufferSetpoint'] != zone + baseline:
+                    raise ValueError('Normal zone/buffer target relationship is not confirmed')
+                target = initial_target(self.adaptive_budget(self.readings()), zone, baseline, min(65, o['pv_charge_max_c']))
+                offset = target - zone
             if testing:
                 # Fixed additional 2 K, never beyond the verified 10 K/live limit.
                 # Caller/config values cannot raise or extend this test envelope.
                 offset = min(baseline + 2, 10, bounds(row)[1])
                 duration = min(duration, 5)
-            if not bounds(row)[0] <= offset <= bounds(row)[1] or offset <= baseline:
+            if (not adaptive and not bounds(row)[0] <= offset <= bounds(row)[1]) or offset <= baseline:
                 raise ValueError('Charge offset must exceed the existing default and respect live controller bounds')
             # Recheck source guards after the network read, immediately before writing.
             if not self.configured() or not self.c.last_update_success or self.readings()['available'] < o['pv_charge_start_w']:
@@ -258,12 +357,15 @@ class BufferCharge:
             duration = max(duration, finite(o['pv_charge_min_hold_min']))
         self.low_surplus_since = None
         self.grid_import_since = None
+        self.stage_candidate, self.stage_since = None, None
         self.lease = {'automatic': automatic, 'started': self.clock(),
                       'block_seconds': duration * 60,
                       'minimum_until': self.clock() + finite(o['pv_charge_min_hold_min']) * 60 if automatic else self.clock(),
                       'extensions': 0, 'point': ident, 'baseline': baseline, 'applied': offset,
                       'expires': self.clock() + duration * 60, 'phase': 'applying',
                       'temperature_unmonitored_test': testing}
+        if adaptive:
+            self.lease.update(adaptive=True, target=target, zone=zone, stage_changed=self.clock())
         self.reason = ''
         try:
             # Durable recovery intent is mandatory before the first device write.
@@ -274,7 +376,10 @@ class BufferCharge:
         self.status = 'charging'
         self.changed()
         try:
-            await self.c.client.set_default(row, offset)
+            if adaptive:
+                await self.write_adaptive(row, offset, zone, target)
+            else:
+                await self.c.client.set_default(row, offset)
             current = await self.fresh(ident)
             validate_buffer_offset(current)
             if value(current['writeDef']) != offset:
@@ -330,6 +435,7 @@ class BufferCharge:
         self.restart_not_before = restart_not_before
         self.low_surplus_since = None
         self.grid_import_since = None
+        self.stage_candidate, self.stage_since = None, None
         self.lease = None
         self.reason, self.status, self.stable_since = reason, 'idle', None
         self.changed()
@@ -365,7 +471,7 @@ class BufferCharge:
             current = value(row['writeDef'])
             if current == self.lease['baseline']:
                 return await self._clear(reason)
-            if current != self.lease['applied']:
+            if current not in (self.lease['applied'], self.lease.get('pending_offset', self.lease['applied'])):
                 return await self._conflict('The controller offset was changed independently. No restoration was written; check the controller and acknowledge this conflict.')
             await self.c.client.set_default(row, self.lease['baseline'])
             check = await self.fresh(self.lease['point'])
@@ -409,6 +515,8 @@ class BufferCharge:
                         reason = 'Manual unmonitored test permission removed'
                     elif not self.c.last_update_success:
                         reason = 'Controller connection lost'
+                    elif self.lease.get('adaptive') and (not self.options['pv_charge_adaptive'] or not self.options['pv_charge_auto']):
+                        reason = 'Adaptive charging disabled'
                     else:
                         data = self.readings()  # Hard guards always win, including during a hold.
                         automatic = self.lease.get('automatic') and self.options['pv_charge_auto']
@@ -440,6 +548,12 @@ class BufferCharge:
                             reason = 'Controller offset changed'
                         self.last_verify = self.clock()
                     if reason is None:
+                        if self.lease.get('adaptive'):
+                            if grid_pending:
+                                await self.target_feedback()  # Still enforce the 65 °C ceiling.
+                                self.stage_candidate, self.stage_since = None, None
+                            else:
+                                await self.adaptive_tick(data, allow_raise=not low)
                         remaining = self.lease['expires'] - self.clock()
                         if automatic and not low and not grid_pending and remaining <= min(300, self.lease['block_seconds'] / 2):
                             await self._extend()

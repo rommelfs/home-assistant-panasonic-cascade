@@ -11,7 +11,7 @@ import aiohttp
 from .auth import AuthProtocolError, Scram, add_handshake, challenge, encode, hash_name, hmac_header, params
 from .diagnostics import queries, convert
 from .calculated import add_calculated_cop
-from .model import bounds, control_kind, enum_options
+from .model import bounds, control_kind, enum_options, validate_buffer_offset
 from .zinc import MARKER, Number, Ref, REFERENCE, ZincError, parse_grids, quote, reference
 
 
@@ -291,6 +291,22 @@ class CascadeClient:
                 result.update(converted)
         result.update({ident: row for ident, row in cached.items()
                        if not row.get("equipRef") or reference(row["equipRef"]) in result})
+
+    async def set_pv_buffer_offset(self, row, offset, zone_target, target_limit):
+        """Opt-in tested buffer-only extension; ordinary controls remain 0–10 K."""
+        validate_buffer_offset(row, require_effective_default=False)
+        ident = reference(row.get('id'))
+        if not ident or not REFERENCE.fullmatch(ident):
+            raise ValueError('Invalid buffer point')
+        from .zinc import value
+        if value(row.get('minVal')) != 0 or value(row.get('maxVal')) != 10:
+            raise ValueError('Adaptive offset requires the verified 0–10 metadata profile')
+        if any(type(v) not in (int, float) or not math.isfinite(v) for v in (offset, zone_target, target_limit)):
+            raise ValueError('Invalid adaptive offset')
+        if not (0 < offset <= 31 and 20 <= zone_target <= 65 and 40 <= target_limit <= 65
+                and zone_target + offset <= target_limit):
+            raise ValueError('Adaptive offset outside verified temperature envelope')
+        await self.eval(f'pointSetDef(@{ident}, {offset:g}°C)')
 
     async def set_default(self, row, new_value):
         kind = control_kind(row)

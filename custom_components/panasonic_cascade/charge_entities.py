@@ -55,12 +55,21 @@ class BufferChargeSensor(ChargeEntity, SensorEntity):
             measured = manager.readings()
         except (ValueError, TypeError):
             measured = {}
+        try:
+            budget = round(manager.adaptive_budget(measured)) if measured and manager.options['pv_charge_adaptive'] else None
+        except (ValueError, TypeError):
+            budget = None
         def point(key):
             rows = [row for row in (self.coordinator.data or {}).values()
                     if row.get('bufferModelId') and model_key(row) == key and row.get('curStatus') == 'ok']
             return value(rows[0].get('curVal')) if len(rows) == 1 else None
         offsets = [row for row in (self.coordinator.data or {}).values() if is_buffer_offset(row)]
         return {'reason':manager.reason, 'phase':lease.get('phase'),
+                'adaptive_configured':manager.options['pv_charge_adaptive'],
+                'adaptive_active':bool(lease.get('adaptive')),
+                'adaptive_target':lease.get('target'),
+                'adaptive_next_target':manager.stage_candidate,
+                'adaptive_budget_w':budget,
                 'baseline_offset':lease.get('baseline'), 'requested_offset':lease.get('applied'),
                 'effective_offset':value(offsets[0].get('curVal')) if len(offsets)==1 and offsets[0].get('curStatus')=='ok' else None,
                 'buffer_target':point('bufferSetpoint'), 'zone_target':point('zone1WaterTemperatureSetpoint'),
