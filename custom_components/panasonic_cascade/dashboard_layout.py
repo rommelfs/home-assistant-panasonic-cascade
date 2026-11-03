@@ -171,6 +171,8 @@ def organise_dashboard(config, registry, owners=None):
                 content += "{% set measured = states('"+meter+"') | float(none) %}"
                 content += '**Differenz zum WP-Zähler:** {{ (measured - attributed) | round(2) if measured is not none and attributed is not none else "—" }} kWh\n\n'
                 content += 'Positive Differenz: noch nicht zugeordnet; negative Differenz ist durch zeitversetzte Zählerstatistik möglich.\n\n'
+            content += "{% if state_attr('"+ids[0]+"','allocation_policy') == 'wp_priority' %}**Zuordnung:** WP-Priorität PV → Batterie → Netz (Schätzung).\n\n{% endif %}"
+            content += "{% set missing = state_attr('"+ids[0]+"','unassigned_power_w') %}{% if missing is number and missing > 0 %}**Messabweichung aktuell:** {{ missing | round(0) }} W nicht zugeordnet. Panasonic meldet mehr WP-Leistung als die Messquellen zusammen liefern.\n\n{% endif %}"
             content += "**Messabdeckung der Zuordnung:** {{ ((state_attr('"+ids[0]+"','observed_seconds') | float(0)) / 3600) | round(2) }} h · seit {{ state_attr('"+ids[0]+"','recording_started') | timestamp_custom('%d.%m. %H:%M', true, '—') }}\n\n"
     if not consumed:
         content += 'Keine Gesamtleistungsmessung verfügbar.\n'

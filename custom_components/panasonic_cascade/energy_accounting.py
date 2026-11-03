@@ -7,7 +7,7 @@ SOURCES = ('pv', 'grid', 'battery')
 PERIODS = ('day', 'week', 'month', 'year')
 
 
-def allocate(wp, pv, export, battery, topology="shared"):
+def allocate(wp, pv, export, battery, topology="shared", policy="proportional"):
     """PV-first house balance, then proportional WP attribution; not a submeter.
 
     export is positive toward grid; battery is positive when discharging.
@@ -17,6 +17,10 @@ def allocate(wp, pv, export, battery, topology="shared"):
         raise ValueError('Invalid power measurement')
     if topology not in ('shared', 'cascade'):
         raise ValueError('Unknown metering topology')
+    if policy not in ('proportional', 'wp_priority'):
+        raise ValueError('Unknown allocation policy')
+    if policy == 'wp_priority' and topology != 'shared':
+        raise ValueError('WP priority requires a shared measurement boundary')
     if topology == 'cascade':
         # EMMA measures the inner house/PV branch; WP is on the outer branch.
         # Only net export from the inner branch reaches the WP bus.
@@ -36,6 +40,17 @@ def allocate(wp, pv, export, battery, topology="shared"):
     supply = {'pv': max(0, pv - max(0, export) - max(0, -battery)),
               'grid': max(0, -export), 'battery': max(0, battery)}
     total = sum(supply.values())
+    if policy == 'wp_priority':
+        # Explicit allocation convention: WP has first claim on each measured source.
+        # Never invent grid supply for a controller/meter discrepancy.
+        supply['battery'] = max(0, battery - max(0, max(0, export) - pv))
+        supply['grid'] = max(0, -export - max(0, max(0, -battery) - pv))
+        remaining = wp
+        result = dict.fromkeys(SOURCES, 0.0)
+        for source in ('pv', 'battery', 'grid'):
+            result[source] = min(remaining, supply[source])
+            remaining -= result[source]
+        return result
     if wp > total + max(100, wp * .1):
         raise ValueError('WP demand exceeds measured household supply; check timing and sources')
     if wp == 0:

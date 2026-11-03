@@ -246,11 +246,15 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             data = {**previous, **user_input}
             if data.get('energy_sources_enabled', True) and not all(data.get('energy_'+key+'_sensor') for key in ('pv','export','battery')):
                 errors['base'] = 'energy_sources_missing'
+            elif data.get('energy_allocation') == 'wp_priority' and data.get('energy_topology','shared') != 'shared':
+                errors['base'] = 'energy_priority_requires_shared'
             else:
                 return self.async_create_entry(title='', data=data)
         d = {**previous, **(user_input or {})}
         fields = {vol.Required('energy_topology', default=d.get('energy_topology','shared')):
                   selector.SelectSelector(selector.SelectSelectorConfig(options=['shared','cascade'], translation_key='energy_topology'))}
+        fields[vol.Required('energy_allocation', default=d.get('energy_allocation','proportional'))] = selector.SelectSelector(
+            selector.SelectSelectorConfig(options=['proportional','wp_priority'], translation_key='energy_allocation'))
         for key in ('pv','export','battery'):
             field = 'energy_'+key+'_sensor'
             fields[vol.Required(field, description={'suggested_value':mapping(d,key+'_sensor') or ''})] = selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))

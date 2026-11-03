@@ -2,6 +2,12 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.18.2](docs/releases/v0.18.2.md)
+
+- Add opt-in WP-priority accounting: available PV, then measured battery discharge, then actual grid import.
+- Cap each source at measured availability; show unexplained controller demand as unassigned power instead of inventing grid supply.
+- Isolate accounting ledgers on allocation-policy changes and clarify measurement boundaries in setup.
+
 ## [0.18.1](docs/releases/v0.18.1.md)
 
 - Show today's grid, PV and battery energy and percentage shares directly in the overview consumption card.

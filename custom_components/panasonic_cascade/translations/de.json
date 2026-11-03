@@ -108,7 +108,7 @@
       },
       "energy_sources": {
         "title": "Stromherkunft der Wärmepumpen",
-        "description": "Rechnerische Zuordnung für alle Wärmepumpen aus dem Haus-Strommix, keine direkte Herkunftsmessung. PV versorgt zuerst Einspeisung und Batterieladung; der verbleibende PV-/Netz-/Batteriemix wird anteilig der WP zugerechnet. Batterieherkunft bleibt unbekannt. Zähler starten ab Einrichtung; Lücken werden ausgelassen. Unabhängig von der PV-Ladefreigabe.",
+        "description": "Rechnerische Zuordnung, keine getrennte Herkunftsmessung. Zählergrenze passend zur Netzmessung wählen. Bei gemeinsamer Messung: anteiliger Hausmix oder WP-Priorität PV → Batterie → Netz. WP-Priorität begrenzt jede Quelle auf ihre gemessene Leistung; ein unerklärter Rest bleibt unzugeordnet. Keine Änderung der Batterie- oder WP-Regelung. Ein Methodenwechsel startet getrennte Herkunftsreihen.",
         "data": {
           "energy_pv_sensor": "PV-Erzeugung",
           "energy_export_sensor": "Netzleistung mit Vorzeichen",
@@ -116,7 +116,8 @@
           "energy_export_positive": "Positive Netzwerte bedeuten Einspeisung",
           "energy_discharge_positive": "Positive Batteriewerte bedeuten Entladung",
           "energy_max_age_s": "Maximales Messwertalter (Sekunden)",
-          "energy_topology": "Messaufbau / Zählergrenze"
+          "energy_topology": "Messaufbau / Zählergrenze",
+          "energy_allocation": "Zuordnungsregel (nur gemeinsame Messung)"
         }
       }
     },
@@ -128,7 +129,8 @@
       "pv_charge_test_manual_only": "Ladetest ohne Pufferfühler erlaubt keinen automatischen Start.",
       "energy_sources_missing": "Alle drei Leistungsquellen auswählen.",
       "pv_charge_grid_limits": "Die Sofort-Abbruchgrenze muss mindestens der Messtoleranz entsprechen.",
-      "pv_charge_adaptive_limits": "Adaptive Ladung benötigt einen Temperaturfühler und eine Abschaltgrenze von 40 bis 65 °C."
+      "pv_charge_adaptive_limits": "Adaptive Ladung benötigt einen Temperaturfühler und eine Abschaltgrenze von 40 bis 65 °C.",
+      "energy_priority_requires_shared": "WP-Priorität benötigt eine gemeinsame Netzmessung einschließlich WP."
     }
   },
   "selector": {
@@ -143,6 +145,12 @@
       "options": {
         "shared": "Gemeinsame Messung: Haus einschließlich WP",
         "cascade": "Messkaskade: EMMA im Hauszweig, WP davor"
+      }
+    },
+    "energy_allocation": {
+      "options": {
+        "proportional": "Anteiliger Haus-Strommix",
+        "wp_priority": "WP-Priorität: PV → Batterie → Netz (Schätzung)"
       }
     }
   }

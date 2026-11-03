@@ -36,6 +36,34 @@ class AllocationTest(unittest.TestCase):
             with self.assertRaises(ValueError): allocate(*args)
 
 
+class PriorityAllocationTest(unittest.TestCase):
+    def test_pv_then_battery_then_actual_grid(self):
+        self.assertEqual(allocate(3000,1000,-1000,1500,policy='wp_priority'),
+                         dict(pv=1000,battery=1500,grid=500))
+        self.assertEqual(allocate(1000,2000,-1000,1000,policy='wp_priority'),
+                         dict(pv=1000,battery=0,grid=0))
+
+    def test_recorded_discrepancy_never_becomes_invented_grid(self):
+        result=allocate(3070,0,-10,2595,policy='wp_priority')
+        self.assertEqual(result,dict(pv=0,battery=2595,grid=10))
+        self.assertEqual(3070-sum(result.values()),465)
+        self.assertEqual(allocate(2969,0,-36,804,policy='wp_priority'),
+                         dict(pv=0,battery=804,grid=36))
+
+    def test_battery_cutoff_uses_measured_discharge_not_a_guessed_soc(self):
+        self.assertEqual(allocate(3000,500,-2500,0,policy='wp_priority'),
+                         dict(pv=500,battery=0,grid=2500))
+        self.assertEqual(allocate(3000,0,0,0,policy='wp_priority'),dict(pv=0,battery=0,grid=0))
+
+    def test_export_and_grid_charging_are_not_available_to_wp(self):
+        self.assertEqual(allocate(3000,0,1000,4000,policy='wp_priority'),
+                         dict(pv=0,battery=3000,grid=0))
+        self.assertEqual(allocate(4000,0,-5000,-3000,policy='wp_priority'),
+                         dict(pv=0,battery=0,grid=2000))
+        with self.assertRaises(ValueError):allocate(1000,0,-1000,0,'cascade','wp_priority')
+        with self.assertRaises(ValueError):allocate(1000,0,-1000,0,policy='typo')
+
+
 class LedgerTest(unittest.TestCase):
     def test_watts_to_kwh_and_sum_sources(self):
         ledger=Ledger(TZ);t=stamp('2026-11-01T12:00:00')
@@ -221,6 +249,27 @@ class CascadeAllocationTest(unittest.TestCase):
             m.clock.return_value=1065;m.tick()
             self.assertEqual(m.store.async_delay_save.call_count,2)
 
+class PriorityFeedbackTest(unittest.TestCase):
+    def test_live_signs_and_shortfall_are_exposed_with_source_caps(self):
+        from custom_components.panasonic_cascade.energy_sources import SourceAccounting,SourceSensor
+        from custom_components.panasonic_cascade.zinc import Number
+        from types import SimpleNamespace
+        from datetime import UTC
+        now=stamp('2026-11-03T18:00:00')
+        states={key:SimpleNamespace(state=str(value),attributes={'unit_of_measurement':'W'},last_reported=datetime.fromtimestamp(now,UTC)) for key,value in [('pv',0),('grid',10),('battery',-2595)]}
+        m=object.__new__(SourceAccounting);m.options={'energy_topology':'shared','energy_allocation':'wp_priority','energy_pv_sensor':'pv','energy_export_sensor':'grid','energy_battery_sensor':'battery','energy_export_positive':False,'energy_discharge_positive':False};m.reported=now
+        m.hass=SimpleNamespace(states=SimpleNamespace(get=states.get))
+        m.c=SimpleNamespace(last_update_success=True,data={'summary:consumedPower':{'curVal':Number(3.07,'kW'),'curStatus':'ok'}},entry=SimpleNamespace(unique_id='install'))
+        m.prefix='test|';m.revision='test';m.reason='';m.ledger=Ledger(TZ)
+        result=m.sample(now)
+        self.assertEqual(result,dict(pv=0,battery=2595,grid=10))
+        self.assertEqual(m.feedback['unassigned_power_w'],465)
+        attrs=SourceSensor(m,'grid','power').extra_state_attributes
+        self.assertIn('unassigned',attrs['allocation_warning'])
+        self.assertEqual(attrs['allocation_policy'],'wp_priority')
+        states['battery'].state='unknown'
+        with self.assertRaises(ValueError):m.sample(now)
+
 class AccountingRevisionTest(unittest.IsolatedAsyncioTestCase):
     async def test_legacy_totals_are_archived_not_mixed_and_mapping_changes_isolate_series(self):
         import tempfile
@@ -255,4 +304,8 @@ class AccountingRevisionTest(unittest.IsolatedAsyncioTestCase):
                 entry.options={**entry.options,'energy_topology':'shared'}
                 changed=SourceAccounting(c)
                 self.assertNotEqual(changed.prefix,manager.prefix)
+                entry.options={**entry.options,'energy_allocation':'wp_priority'}
+                priority=SourceAccounting(c)
+                self.assertNotEqual(priority.prefix,changed.prefix)
+                self.assertNotEqual(priority.prefix,manager.prefix)
             await hass.async_stop()

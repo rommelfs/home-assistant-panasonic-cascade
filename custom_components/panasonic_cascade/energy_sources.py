@@ -42,6 +42,8 @@ class SourceAccounting:
         self.options = coordinator.entry.options
         settings = {key: mapping(self.options, key) for key in ('pv_sensor','export_sensor','battery_sensor','export_positive','discharge_positive')}
         settings['topology'] = self.options.get('energy_topology', 'shared')
+        if self.options.get('energy_allocation', 'proportional') != 'proportional':
+            settings['allocation'] = self.options['energy_allocation']
         self.revision = hashlib.sha256(json.dumps(settings, sort_keys=True).encode()).hexdigest()[:12]
         self.prefix = f'{coordinator.entry.unique_id}|energy_accounting_v2:{self.revision}|'
         self.store = Store(self.hass, 1, f'{DOMAIN}.energy_sources_v2.{coordinator.entry.entry_id}.{self.revision}', atomic_writes=True)
@@ -108,13 +110,19 @@ class SourceAccounting:
                     # regardless of stale/missing PV or battery telemetry downstream.
                     return {'pv':0.0, 'grid':wp_power(self.c.data), 'battery':0.0}
         data['battery'] *= 1 if mapping(self.options,'discharge_positive',True) else -1
-        return allocate(wp_power(self.c.data), **data, topology=self.options.get('energy_topology','shared'))
+        demand = wp_power(self.c.data)
+        result = allocate(demand, **data, topology=self.options.get('energy_topology','shared'),
+                          policy=self.options.get('energy_allocation','proportional'))
+        self.feedback = {'controller_power_w':demand,
+                         'unassigned_power_w':max(0.0, demand-sum(result.values()))}
+        return result
 
     @callback
     def tick(self, _event=None):
         if self.closed:
             return
         now = self.clock()
+        self.feedback = {}
         try:
             self.power = self.sample(now)
             self.reason = ''
@@ -179,10 +187,14 @@ class SourceSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self):
-        result = {'estimated':True,'method':('House-branch export supplies outer WP branch; mixed export proportional' if self.manager.options.get('energy_topology') == 'cascade' else 'Shared household balance; proportional WP attribution'),
+        result = {'estimated':True,'method':('WP priority: PV then measured battery discharge then measured grid import; remainder unassigned' if self.manager.options.get('energy_allocation') == 'wp_priority' else 'House-branch export supplies outer WP branch; mixed export proportional' if self.manager.options.get('energy_topology') == 'cascade' else 'Shared household balance; proportional WP attribution'),
                   'metering_topology':self.manager.options.get('energy_topology','shared'), 'accounting_revision':self.manager.revision,
                   'legacy_totals_excluded':True,
                   'battery_origin':'not inferred', 'measurement_issue':self.manager.reason or None,
+                  'allocation_policy':self.manager.options.get('energy_allocation','proportional'),
+                  'allocation_warning':('Controller power exceeds measured source supply; remainder unassigned'
+                                        if getattr(self.manager,'feedback',{}).get('unassigned_power_w',0) > 0 else None),
+                  **getattr(self.manager,'feedback',{}),
                   'recording_started':self.manager.ledger.started, 'scope':'all heat pumps',
                   'source_entities':{key:mapping(self.manager.options,key+'_sensor') for key in ('pv','export','battery')}}
         if self.period in PERIODS:

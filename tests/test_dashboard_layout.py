@@ -82,6 +82,10 @@ class LayoutTest(unittest.IsolatedAsyncioTestCase):
         consumption=cards(config['views'][0])[1]
         rendered=Template(consumption['content'],hass).async_render(parse_result=False)
         self.assertIn('1.23',rendered);self.assertIn('6.0',rendered);self.assertIn('38.0',rendered);self.assertIn('WP-Zähler',rendered)
+        hass.states.async_set('sensor.pv_day','2',{'allocation_policy':'wp_priority','unassigned_power_w':465})
+        rendered=Template(consumption['content'],hass).async_render(parse_result=False)
+        self.assertIn('WP-Priorität PV → Batterie → Netz',rendered)
+        self.assertIn('465 W nicht zugeordnet',rendered)
         self.assertIn('| Netz | 3.0 kWh | 50.0 % |',rendered)
         self.assertIn('| PV | 2.0 kWh | 33.3 % |',rendered)
         self.assertIn('| Batterie | 1.0 kWh | 16.7 % |',rendered)

@@ -108,7 +108,7 @@
       },
       "energy_sources": {
         "title": "Heat-pump electricity sources",
-        "description": "Estimated attribution for all heat pumps from the household power mix, not direct source metering. Subtract export and battery charging from PV first, then attribute the remaining PV/grid/battery mix proportionally to the heat pumps. Battery provenance is not inferred. Counters start at setup; gaps are omitted. Independent of the PV charging permission.",
+        "description": "Estimated allocation, not separate source metering. Match the measurement boundary to the grid meter. Shared measurement supports proportional household mix or WP priority: PV → battery → grid. Priority caps every source at measured available power; unexplained demand remains unassigned. Does not control the battery or heat pump. Changing method isolates a separate accounting series.",
         "data": {
           "energy_pv_sensor": "PV production",
           "energy_export_sensor": "Signed grid power",
@@ -116,7 +116,8 @@
           "energy_export_positive": "Positive grid readings mean export",
           "energy_discharge_positive": "Positive battery readings mean discharge",
           "energy_max_age_s": "Maximum measurement age (seconds)",
-          "energy_topology": "Metering topology / measurement boundary"
+          "energy_topology": "Metering topology / measurement boundary",
+          "energy_allocation": "Allocation policy (shared boundary only)"
         }
       }
     },
@@ -128,7 +129,8 @@
       "pv_charge_test_manual_only": "Sensorless charge tests do not allow automatic start.",
       "energy_sources_missing": "Select all three power measurements.",
       "pv_charge_grid_limits": "The immediate-stop threshold must be at least the measurement tolerance.",
-      "pv_charge_adaptive_limits": "Adaptive charging requires a temperature sensor and a stop limit of 40–65 °C."
+      "pv_charge_adaptive_limits": "Adaptive charging requires a temperature sensor and a stop limit of 40–65 °C.",
+      "energy_priority_requires_shared": "WP priority requires a shared grid measurement including the heat pump."
     }
   },
   "selector": {
@@ -143,6 +145,12 @@
       "options": {
         "shared": "Shared boundary: household includes WP",
         "cascade": "Metering cascade: EMMA in house branch, WP upstream"
+      }
+    },
+    "energy_allocation": {
+      "options": {
+        "proportional": "Proportional household mix",
+        "wp_priority": "WP priority: PV → battery → grid (estimate)"
       }
     }
   }
