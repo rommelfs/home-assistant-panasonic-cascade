@@ -2,6 +2,11 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.18.1](docs/releases/v0.18.1.md)
+
+- Show today's grid, PV and battery energy and percentage shares directly in the overview consumption card.
+- Keep partial attribution, observation time and the difference against WP counter statistics explicit; missing/zero totals do not produce invented percentages.
+
 ## [0.18.0](docs/releases/v0.18.0.md)
 
 - Support metering cascades with EMMA in the inner house/PV branch and WP upstream; only branch export supplies WP.

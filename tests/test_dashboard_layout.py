@@ -82,10 +82,24 @@ class LayoutTest(unittest.IsolatedAsyncioTestCase):
         consumption=cards(config['views'][0])[1]
         rendered=Template(consumption['content'],hass).async_render(parse_result=False)
         self.assertIn('1.23',rendered);self.assertIn('6.0',rendered);self.assertIn('38.0',rendered);self.assertIn('WP-Zähler',rendered)
+        self.assertIn('| Netz | 3.0 kWh | 50.0 % |',rendered)
+        self.assertIn('| PV | 2.0 kWh | 33.3 % |',rendered)
+        self.assertIn('| Batterie | 1.0 kWh | 16.7 % |',rendered)
+        self.assertIn('**Differenz zum WP-Zähler:** 32.0 kWh',rendered)
+        self.assertRegex(rendered,r'\| Herkunft[^\n]*(?:\n\|[^\n]*){4}')
+        for source in ('pv','grid','battery'):
+            hass.states.async_set(f'sensor.{source}_day','0')
+        empty=Template(consumption['content'],hass).async_render(parse_result=False)
+        self.assertIn('| Netz | 0.0 kWh | — % |',empty)
+        self.assertNotIn('100.0 %',empty)
+        for source,n in [('pv',2),('grid',3),('battery',1)]:
+            hass.states.async_set(f'sensor.{source}_day',str(n))
         hass.states.async_set('sensor.total_power','unavailable',{'unit_of_measurement':'kW'})
         hass.states.async_set('sensor.pv_day','unknown',{'unit_of_measurement':'kWh'})
         rendered=Template(consumption['content'],hass).async_render(parse_result=False)
         self.assertIn('—',rendered);self.assertNotIn('6.0',rendered)
+        self.assertIn('| Netz | 3.0 kWh | — % |',rendered)
+        self.assertIn('| PV | — kWh | — % |',rendered)
         for v in config['views']:
             for c in cards(v):
                 if MARKER in c.get('content',''):

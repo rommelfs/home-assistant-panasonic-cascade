@@ -162,6 +162,15 @@ def organise_dashboard(config, registry, owners=None):
         if all(ids):
             content += '{% set values = [' + ','.join("states('"+i+"') | float(none)" for i in ids) + '] %}\n'
             content += '**Davon zugeordnet (Teilaufzeichnung):** {{ values | sum | round(2) if none not in values else "—" }} kWh (Zuordnung)\n\n'
+            content += '{% set attributed = values | sum if none not in values else none %}\n'
+            content += '| Herkunft | Heute zugeordnet | Anteil* |\n| :--- | ---: | ---: |\n'
+            for label,index in (('Netz',1),('PV',0),('Batterie',2)):
+                content += '| '+label+' | {{ values['+str(index)+'] | round(2) if values['+str(index)+'] is not none else "—" }} kWh | {{ (values['+str(index)+'] / attributed * 100) | round(1) if attributed is not none and attributed > 0 else "—" }} % |\n'
+            content += '\n*Anteile an der zugeordneten Energie, nicht am gesamten Tagesverbrauch.*\n\n'
+            if meter:
+                content += "{% set measured = states('"+meter+"') | float(none) %}"
+                content += '**Differenz zum WP-Zähler:** {{ (measured - attributed) | round(2) if measured is not none and attributed is not none else "—" }} kWh\n\n'
+                content += 'Positive Differenz: noch nicht zugeordnet; negative Differenz ist durch zeitversetzte Zählerstatistik möglich.\n\n'
             content += "**Messabdeckung der Zuordnung:** {{ ((state_attr('"+ids[0]+"','observed_seconds') | float(0)) / 3600) | round(2) }} h · seit {{ state_attr('"+ids[0]+"','recording_started') | timestamp_custom('%d.%m. %H:%M', true, '—') }}\n\n"
     if not consumed:
         content += 'Keine Gesamtleistungsmessung verfügbar.\n'
