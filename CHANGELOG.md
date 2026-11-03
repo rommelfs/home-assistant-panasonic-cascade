@@ -2,6 +2,13 @@
 
 All published versions are experimental prereleases. Full notes are available for each version below.
 
+## [0.18.0](docs/releases/v0.18.0.md)
+
+- Support metering cascades with EMMA in the inner house/PV branch and WP upstream; only branch export supplies WP.
+- Show counter-based WP consumption independently of source attribution, with explicit unmatched energy and observation time.
+- Start isolated corrected attribution series; preserve legacy data without mixing it into new totals or charts.
+- Prevent frequent measurement callbacks from indefinitely postponing energy-ledger persistence.
+
 ## [0.17.2](docs/releases/v0.17.2.md)
 
 - Include synthetic controller diagnostics and equipment-level Heat/Cool offset fields in seasonal display filtering.

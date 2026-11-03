@@ -115,7 +115,8 @@
           "energy_battery_sensor": "Batterieleistung mit Vorzeichen",
           "energy_export_positive": "Positive Netzwerte bedeuten Einspeisung",
           "energy_discharge_positive": "Positive Batteriewerte bedeuten Entladung",
-          "energy_max_age_s": "Maximales Messwertalter (Sekunden)"
+          "energy_max_age_s": "Maximales Messwertalter (Sekunden)",
+          "energy_topology": "Messaufbau / Zählergrenze"
         }
       }
     },
@@ -136,6 +137,12 @@
         "heat": "Heizen (Winter)",
         "cool": "Kühlen (Sommer)",
         "both": "Heizen und Kühlen"
+      }
+    },
+    "energy_topology": {
+      "options": {
+        "shared": "Gemeinsame Messung: Haus einschließlich WP",
+        "cascade": "Messkaskade: EMMA im Hauszweig, WP davor"
       }
     }
   }

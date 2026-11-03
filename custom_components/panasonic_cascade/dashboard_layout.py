@@ -5,6 +5,10 @@ from .labels import display_label
 
 MARKER = '{# Panasonic Cascade at-a-glance v1 #}'
 
+LEGACY_SOURCE_NOTE = '**Rechnerische Zuordnung für alle Wärmepumpen.** PV/Netz/Batterie werden anteilig aus dem Haus-Strommix zugeordnet; keine getrennte Herkunftsmessung am WP-Anschluss. Batterieherkunft bleibt unbekannt. Zählung ab Einrichtung; Messlücken werden ausgelassen.'
+SOURCE_NOTE = '**Rechnerische Zuordnung nach konfigurierter Zählergrenze.** Bei Messkaskade versorgt nur der Überschuss des Hauszweigs die WP; der übrige WP-Bedarf kommt aus dem Netz. Gemischter PV-/Batterieexport wird anteilig geschätzt. Herkunft wird ab Umstellung neu erfasst; alte Herkunftsreihen sind ausgeschlossen. WP-Gesamtverbrauch stammt unabhängig davon aus den Panasonic-Zählerstatistiken.'
+
+
 
 def bind_dashboard_paths(config, url_path):
     """Use the actual dashboard URL for links; never hardcode the installation path."""
@@ -44,14 +48,26 @@ def source_balance(records, owner):
     return periods
 
 
-def energy_table(periods):
-    content = MARKER + '\n**Rechnerische Zuordnung · kWh**\n\n| Zeitraum | PV | Netz | Batterie | Gesamt |\n|---|---:|---:|---:|---:|\n'
-    for period, label in [('day','Heute'),('week','Woche'),('month','Monat'),('year','Jahr'),('total','Seit Einrichtung')]:
+def energy_table(periods, consumption=None):
+    consumption = consumption or {}
+    content = MARKER + '\n**Rechnerische Zuordnung · kWh**\n\n| Zeitraum | WP gesamt | PV | Netz | Batterie | Zugeordnet | Differenz* |\n|---|---:|---:|---:|---:|---:|---:|\n'
+    for period, label in [('day','Heute'),('week','Woche'),('month','Monat'),('year','Jahr'),('total','Seit Umstellung')]:
         ids = [periods.get(period, {}).get(k) for k in ('pv','grid','battery')]
         if not all(ids):
             continue
         content += '{% set values = [' + ','.join("states('"+i+"') | float(none)" for i in ids) + '] -%}\n'
-        content += '| ' + label + ' | {% for v in values %}{{ v | round(2) if v is not none else "—" }} | {% endfor %}{{ values | sum | round(2) if none not in values else "—" }} |\n'
+        meter = consumption.get(period)
+        content += '{% set meter = ' + ("states('"+meter+"') | float(none)" if meter else 'none') + ' -%}\n'
+        content += '| ' + label + ' | {{ meter | round(2) if meter is not none else "—" }} | {% for v in values %}{{ v | round(2) if v is not none else "—" }} | {% endfor %}{{ values | sum | round(2) if none not in values else "—" }} | {{ ((meter - values | sum) | round(2)) if meter is not none and none not in values else "—" }} |\n'
+    content += '\n**Erfasste Zuordnungszeit:** '
+    for period,label in [('day','Heute'),('week','Woche'),('month','Monat'),('year','Jahr')]:
+        source = periods.get(period,{}).get('pv')
+        if source:
+            content += label + " {{ (state_attr('"+source+"','observed_seconds') | float(0) / 3600) | round(2) }} h · "
+    first = periods.get('day',{}).get('pv')
+    if first:
+        content += "\n\n{% if state_attr('"+first+"','measurement_issue') %}**Messhinweis:** {{ state_attr('"+first+"','measurement_issue') }}{% endif %}\n"
+    content += '\n*Positive Differenz: noch nicht zugeordnet / Messlücken; negative Differenz kann durch nachlaufende Zählerstatistiken entstehen. Zählerstatistiken und Leistungsintegration haben unterschiedliche Auflösung. Herkunft wird erst ab Umstellung neu erfasst; keine rückwirkend erfundenen Anteile.\n'
     return {'type':'markdown', 'title':'Stromherkunft · Bilanz', 'content':content}
 
 
@@ -136,11 +152,17 @@ def organise_dashboard(config, registry, owners=None):
     for e in consumed:
         content += "{% set value = states('"+e.entity_id+"') | float(none) %}{% set unit = state_attr('"+e.entity_id+"','unit_of_measurement') %}\n"
         content += '**Aktuell:** {{ ((value / 1000 if unit == "W" else value) | round(2)) if value is not none and unit in ["W","kW"] else "—" }} kW\n\n'
+    consumption = {owner:{e.unique_id.rsplit('|consumption:',1)[1]:e.entity_id for e in records
+                         if e.config_entry_id==owner and '|consumption:' in e.unique_id} for owner in owners}
     for owner in sorted(owners):
+        meter = consumption[owner].get('day')
+        if meter:
+            content += "**Heute · WP-Zähler:** {{ states('"+meter+"') | float(none) | round(2) if is_number(states('"+meter+"')) else '—' }} kWh (Zählerstatistik)\n\n"
         ids = [source_balance(records,owner).get('day',{}).get(k) for k in ('pv','grid','battery')]
         if all(ids):
             content += '{% set values = [' + ','.join("states('"+i+"') | float(none)" for i in ids) + '] %}\n'
-            content += '**Heute erfasst:** {{ values | sum | round(2) if none not in values else "—" }} kWh (Zuordnung)\n\n'
+            content += '**Davon zugeordnet (Teilaufzeichnung):** {{ values | sum | round(2) if none not in values else "—" }} kWh (Zuordnung)\n\n'
+            content += "**Messabdeckung der Zuordnung:** {{ ((state_attr('"+ids[0]+"','observed_seconds') | float(0)) / 3600) | round(2) }} h · seit {{ state_attr('"+ids[0]+"','recording_started') | timestamp_custom('%d.%m. %H:%M', true, '—') }}\n\n"
     if not consumed:
         content += 'Keine Gesamtleistungsmessung verfügbar.\n'
     content += '[Energie und Stromherkunft](energy)'
@@ -174,6 +196,9 @@ def organise_dashboard(config, registry, owners=None):
             if 'cards' in container:container['cards']=kept
     energy = next((v for v in result['views'] if v.get('path')=='energy'),None)
     if energy:
+        for card in walk(energy):
+            if card.get('type') == 'markdown' and card.get('content') == LEGACY_SOURCE_NOTE:
+                card['content'] = SOURCE_NOTE
         has_instant = any(c.get('title')=='Momentanverbrauch' for c in cards(energy))
         for container in [energy]+energy.get('sections',[]):
             if 'cards' not in container:continue
@@ -184,7 +209,7 @@ def organise_dashboard(config, registry, owners=None):
         for owner in sorted(owners):
             periods = source_balance(records,owner)
             if periods:
-                table=energy_table(periods)
+                table=energy_table(periods,consumption.get(owner))
                 # Refresh only our marked table on subsequent migrations.
                 existing=next((c for c in cards(energy) if c.get('title')==table['title'] and MARKER in c.get('content','')),None)
                 if existing is not None:existing.update(table)

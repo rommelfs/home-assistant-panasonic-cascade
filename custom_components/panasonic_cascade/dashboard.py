@@ -16,7 +16,7 @@ from .const import DOMAIN
 from .model import name, model_key
 from .labels import compact_label, display_label
 from .zinc import reference
-from .dashboard_layout import organise_dashboard, bind_dashboard_paths
+from .dashboard_layout import organise_dashboard, bind_dashboard_paths, SOURCE_NOTE
 
 SERVICE = "populate_dashboard"
 LOGGER = logging.getLogger(__name__)
@@ -109,6 +109,8 @@ def build_dashboard(hass, entry_id=None):
         if isinstance(data, dict) and getattr(entry, "unique_id", None):
             point_models.update({f"{entry.unique_id}|{ident}|curVal":model_key(row) for ident,row in data.items()})
     for entity in entities:
+        if '|consumption:' in entity.unique_id:
+            continue
         label = entity.name or compact_label(name({"dis": entity.original_name or entity.entity_id}))
         if entity.unique_id.endswith("|isRunning") and not entity.name:
             label = label.replace(" · In Betrieb", " · Betriebsfreigabe").replace(" – In Betrieb", " · Betriebsfreigabe")
@@ -277,7 +279,7 @@ def build_dashboard(hass, entry_id=None):
             prefix = 'WP · Stromherkunft' + (' · '+title if len(source_rows)>1 else '')
             def selected(period):
                 return [{'entity':periods[period][key]['entity'],'name':labels[key]} for key in ('pv','grid','battery') if key in periods.get(period,{})]
-            cards = [{'type':'markdown','title':prefix,'content':'**Rechnerische Zuordnung für alle Wärmepumpen.** PV/Netz/Batterie werden anteilig aus dem Haus-Strommix zugeordnet; keine getrennte Herkunftsmessung am WP-Anschluss. Batterieherkunft bleibt unbekannt. Zählung ab Einrichtung; Messlücken werden ausgelassen.'}]
+            cards = [{'type':'markdown','title':prefix,'content':SOURCE_NOTE}]
             if selected('power'):
                 cards += [{'type':'entities','title':prefix+' · Aktuell','show_header_toggle':False,'entities':selected('power')},
                           {'type':'history-graph','title':prefix+' · Leistung (24 h)','hours_to_show':24,'entities':selected('power')}]

@@ -115,7 +115,8 @@
           "energy_battery_sensor": "Signed battery power",
           "energy_export_positive": "Positive grid readings mean export",
           "energy_discharge_positive": "Positive battery readings mean discharge",
-          "energy_max_age_s": "Maximum measurement age (seconds)"
+          "energy_max_age_s": "Maximum measurement age (seconds)",
+          "energy_topology": "Metering topology / measurement boundary"
         }
       }
     },
@@ -136,6 +137,12 @@
         "heat": "Heating (winter)",
         "cool": "Cooling (summer)",
         "both": "Heating and cooling"
+      }
+    },
+    "energy_topology": {
+      "options": {
+        "shared": "Shared boundary: household includes WP",
+        "cascade": "Metering cascade: EMMA in house branch, WP upstream"
       }
     }
   }

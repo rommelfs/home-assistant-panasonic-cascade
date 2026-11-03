@@ -175,3 +175,84 @@ class SourceMappingAndPowerTest(unittest.TestCase):
         states['sensor.export'].state='2'
         m.reported=now-61
         with self.assertRaises(ValueError):m.sample(now)
+
+class CascadeAllocationTest(unittest.TestCase):
+    def test_night_wp_is_outside_house_import_boundary(self):
+        self.assertEqual(allocate(2504,0,-698,0,'cascade'),dict(pv=0,grid=2504,battery=0))
+
+    def test_recorded_noon_case_only_house_export_supplies_wp(self):
+        self.assertEqual(allocate(2508,5454,122,-961,'cascade'),dict(pv=122,grid=2386,battery=0))
+
+    def test_export_above_wp_load_is_not_double_counted(self):
+        self.assertEqual(allocate(4000,18000,14000,-1000,'cascade'),dict(pv=4000,grid=0,battery=0))
+
+    def test_battery_and_mixed_export_keep_separate_provenance(self):
+        self.assertEqual(allocate(2000,0,3000,4000,'cascade'),dict(pv=0,grid=0,battery=2000))
+        result=allocate(2000,1000,1500,2000,'cascade')
+        self.assertEqual(result,dict(pv=500,grid=500,battery=1000))
+        self.assertEqual(sum(result.values()),2000)
+        with self.assertRaises(ValueError):allocate(1000,100,3000,0,'cascade')
+        with self.assertRaises(ValueError):allocate(1000,1000,0,0,'typo')
+
+    def test_grid_only_cascade_does_not_require_fresh_inner_pv_or_battery(self):
+        from custom_components.panasonic_cascade.energy_sources import SourceAccounting
+        from custom_components.panasonic_cascade.zinc import Number
+        from types import SimpleNamespace
+        from datetime import UTC
+        now=stamp('2026-11-03T00:30:00')
+        m=object.__new__(SourceAccounting);m.options={'energy_topology':'cascade','energy_export_sensor':'sensor.grid','energy_export_positive':False};m.reported=now
+        grid=SimpleNamespace(state='698',attributes={'unit_of_measurement':'W'},last_reported=datetime.fromtimestamp(now,UTC))
+        m.hass=SimpleNamespace(states=SimpleNamespace(get=lambda eid:grid if eid=='sensor.grid' else None))
+        m.c=SimpleNamespace(last_update_success=True,data={'summary:consumedPower':{'curVal':Number(2.504,'kW'),'curStatus':'ok'}})
+        self.assertEqual(m.sample(now),dict(pv=0,grid=2504,battery=0))
+        grid.state='-122'
+        with self.assertRaises(ValueError):m.sample(now)  # Export needs PV/battery provenance.
+        grid.state='698';grid.last_reported=datetime.fromtimestamp(now-100,UTC)
+        with self.assertRaises(ValueError):m.sample(now)
+
+    def test_periodic_save_is_not_postponed_forever_by_frequent_ticks(self):
+        from custom_components.panasonic_cascade.energy_sources import SourceAccounting
+        from unittest.mock import Mock,patch
+        m=object.__new__(SourceAccounting);m.closed=False;m.save_pending=False;m.clock=Mock(return_value=1000);m.sample=Mock(return_value=dict(pv=1000,grid=0,battery=0));m.ledger=Ledger(TZ);m.store=Mock();m.hass=Mock();m.signal='test'
+        with patch('custom_components.panasonic_cascade.energy_sources.async_dispatcher_send'):
+            for t in range(1000,1060,5):m.clock.return_value=t;m.tick()
+            self.assertEqual(m.store.async_delay_save.call_count,1)
+            first=m.saved_snapshot();self.assertGreater(first['total']['pv'],0)
+            m.clock.return_value=1065;m.tick()
+            self.assertEqual(m.store.async_delay_save.call_count,2)
+
+class AccountingRevisionTest(unittest.IsolatedAsyncioTestCase):
+    async def test_legacy_totals_are_archived_not_mixed_and_mapping_changes_isolate_series(self):
+        import tempfile
+        from types import SimpleNamespace
+        from unittest.mock import Mock,patch
+        from homeassistant.core import HomeAssistant
+        from homeassistant.helpers.storage import Store
+        from homeassistant.helpers import entity_registry as er
+        from custom_components.panasonic_cascade.energy_sources import SourceAccounting
+        with tempfile.TemporaryDirectory() as root:
+            hass=HomeAssistant(root)
+            entry=SimpleNamespace(entry_id='test',unique_id='install',options={
+                'energy_topology':'cascade','energy_export_sensor':'sensor.grid','energy_pv_sensor':'sensor.pv','energy_battery_sensor':'sensor.battery'})
+            c=SimpleNamespace(hass=hass,entry=entry,data={},last_update_success=True,async_add_listener=Mock(return_value=Mock()))
+            old=SimpleNamespace(entity_id='sensor.old',platform='panasonic_cascade',config_entry_id='test',unique_id='install|energy_source:pv:total',hidden_by=None,disabled_by=None)
+            other=SimpleNamespace(**{**vars(old),'entity_id':'sensor.other','config_entry_id':'another'})
+            registry=SimpleNamespace(entities={e.entity_id:e for e in (old,other)})
+            registry.async_update_entity=lambda eid,**kw:[setattr(registry.entities[eid],k,v) for k,v in kw.items()]
+            await Store(hass,1,'panasonic_cascade.energy_sources.test').async_save({'total':{'pv':999}})
+            manager=SourceAccounting(c)
+            with patch('custom_components.panasonic_cascade.energy_sources.er.async_get',return_value=registry):
+                await manager.initialize()
+                self.assertEqual(manager.ledger.total,dict(pv=0,grid=0,battery=0))
+                self.assertEqual(old.disabled_by,er.RegistryEntryDisabler.INTEGRATION)
+                self.assertIsNone(other.disabled_by)
+                manager.ledger.total['pv']=1
+                await manager.close()
+                reloaded=SourceAccounting(c);await reloaded.initialize()
+                self.assertEqual(reloaded.prefix,manager.prefix)
+                self.assertEqual(reloaded.ledger.total['pv'],1)
+                await reloaded.close()
+                entry.options={**entry.options,'energy_topology':'shared'}
+                changed=SourceAccounting(c)
+                self.assertNotEqual(changed.prefix,manager.prefix)
+            await hass.async_stop()

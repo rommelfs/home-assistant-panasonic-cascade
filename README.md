@@ -8,6 +8,10 @@ Version **0.14.0** adds labelled, read-only PV/grid/battery attribution for all 
 
 Repository: [rommelfs/home-assistant-panasonic-cascade](https://github.com/rommelfs/home-assistant-panasonic-cascade). See the [changelog](CHANGELOG.md) and [release notes](docs/releases/) for version-specific changes.
 
+## Metering cascades and electricity accounting
+
+Version **0.18.0** adds an explicit measurement-boundary setting for electricity-source accounting. Select **Configure electricity-source measurements → Metering topology**: shared household including WP, or an EMMA house/PV branch with the WP upstream in a metering cascade. WP counter consumption is independent of source availability; the dashboard exposes partial attribution and unmatched differences. Corrected source series use new entity IDs and exclude legacy totals. See [electricity-source accounting](docs/electricity-sources.md) and [release notes](docs/releases/v0.18.0.md).
+
 ## Tested equipment and software
 
 The reference installation uses **two Panasonic WH-WXG09ME8 outdoor units (9 kW each)** with **P-SMART EDGE v5.1**. The controller identifies the main unit's indoor/controller model as **WH-CME8** and the second unit as **Standalone**. Automated tests use **Home Assistant Core 2026.10.0 and Python 3.14**.

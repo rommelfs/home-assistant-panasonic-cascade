@@ -7,7 +7,7 @@ SOURCES = ('pv', 'grid', 'battery')
 PERIODS = ('day', 'week', 'month', 'year')
 
 
-def allocate(wp, pv, export, battery):
+def allocate(wp, pv, export, battery, topology="shared"):
     """PV-first house balance, then proportional WP attribution; not a submeter.
 
     export is positive toward grid; battery is positive when discharging.
@@ -15,6 +15,24 @@ def allocate(wp, pv, export, battery):
     """
     if any(isinstance(v, bool) or not math.isfinite(v) for v in (wp, pv, export, battery)) or min(wp, pv) < 0:
         raise ValueError('Invalid power measurement')
+    if topology not in ('shared', 'cascade'):
+        raise ValueError('Unknown metering topology')
+    if topology == 'cascade':
+        # EMMA measures the inner house/PV branch; WP is on the outer branch.
+        # Only net export from the inner branch reaches the WP bus.
+        available_pv = max(0, pv - max(0, -battery))
+        available_battery = max(0, battery)
+        supply = available_pv + available_battery
+        exported = max(0, export)
+        if exported > supply + max(100, exported * .1):
+            raise ValueError('House-branch export exceeds measured PV/battery supply')
+        used = min(wp, exported)
+        if used and supply <= 0:
+            raise ValueError('Export provenance unavailable')
+        # Provenance of mixed export is an explicit proportional estimate.
+        pv_share = used * available_pv / supply if supply else 0.0
+        battery_share = used * available_battery / supply if supply else 0.0
+        return {'pv': pv_share, 'grid': wp - used, 'battery': battery_share}
     supply = {'pv': max(0, pv - max(0, export) - max(0, -battery)),
               'grid': max(0, -export), 'battery': max(0, battery)}
     total = sum(supply.values())

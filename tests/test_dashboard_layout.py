@@ -24,6 +24,8 @@ class LayoutTest(unittest.IsolatedAsyncioTestCase):
         for source in ('pv','grid','battery'):
             for period in ('power','day','week','month','year','total'):
                 add(f'sensor.{source}_{period}',f'energy_source:{source}:{period}',unit='W' if period=='power' else 'kWh')
+        for period in ('day','week','month','year'):
+            add(f'sensor.wp_consumption_{period}',f'consumption:{period}',unit='kWh')
         entry=hass.config_entries.async_entries.return_value[0]
         entry.title='Reference';entry.unique_id='install';entry.options={'pv_charge_enabled':True}
         entry.runtime_data=SimpleNamespace(data={},buffer_charge=SimpleNamespace(lease=None))
@@ -76,9 +78,10 @@ class LayoutTest(unittest.IsolatedAsyncioTestCase):
         hass.states.async_set('sensor.charge','Wartet auf Überschuss',{'phase':None,'reason':'No PV production','buffer_target':36,'effective_offset':0,'adaptive_configured':True,'temperature_limit':65})
         for source,n in [('pv',2),('grid',3),('battery',1)]:
             for period in ('day','week','month','year','total'):hass.states.async_set(f'sensor.{source}_{period}',str(n),{'unit_of_measurement':'kWh'})
+        hass.states.async_set('sensor.wp_consumption_day','38',{'unit_of_measurement':'kWh'})
         consumption=cards(config['views'][0])[1]
         rendered=Template(consumption['content'],hass).async_render(parse_result=False)
-        self.assertIn('1.23',rendered);self.assertIn('6.0',rendered)
+        self.assertIn('1.23',rendered);self.assertIn('6.0',rendered);self.assertIn('38.0',rendered);self.assertIn('WP-Zähler',rendered)
         hass.states.async_set('sensor.total_power','unavailable',{'unit_of_measurement':'kW'})
         hass.states.async_set('sensor.pv_day','unknown',{'unit_of_measurement':'kWh'})
         rendered=Template(consumption['content'],hass).async_render(parse_result=False)

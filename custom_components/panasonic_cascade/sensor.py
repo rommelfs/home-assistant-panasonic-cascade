@@ -42,6 +42,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         from .energy_sources import SourceSensor, SOURCES, PERIODS
         entities.extend(SourceSensor(coordinator.energy_sources, source, period)
                         for source in SOURCES for period in ('power','total',*PERIODS))
+    from .consumption import ConsumptionSensor, COUNTERS
+    if any(model_key(row) in COUNTERS for row in coordinator.data.values()):
+        entities.extend(ConsumptionSensor(coordinator, period) for period in ('day','week','month','year'))
     async_add_entities(entities)
 
 

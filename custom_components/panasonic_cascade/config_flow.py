@@ -249,7 +249,8 @@ class CascadeOptionsFlow(config_entries.OptionsFlow):
             else:
                 return self.async_create_entry(title='', data=data)
         d = {**previous, **(user_input or {})}
-        fields = {}
+        fields = {vol.Required('energy_topology', default=d.get('energy_topology','shared')):
+                  selector.SelectSelector(selector.SelectSelectorConfig(options=['shared','cascade'], translation_key='energy_topology'))}
         for key in ('pv','export','battery'):
             field = 'energy_'+key+'_sensor'
             fields[vol.Required(field, description={'suggested_value':mapping(d,key+'_sensor') or ''})] = selector.EntitySelector(selector.EntitySelectorConfig(domain='sensor'))
